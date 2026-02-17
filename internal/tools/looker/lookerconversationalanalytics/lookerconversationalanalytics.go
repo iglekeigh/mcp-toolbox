@@ -118,10 +118,15 @@ type InlineContext struct {
 	DatasourceReferences DatasourceReferences `json:"datasourceReferences"`
 	Options              ConversationOptions  `json:"options"`
 }
+type DataAgentContext struct {
+	DataAgent string `json:"dataAgent"`
+}
+
 type CAPayload struct {
-	Messages      []Message     `json:"messages"`
-	InlineContext InlineContext `json:"inlineContext"`
-	ClientIdEnum  string        `json:"clientIdEnum"`
+	Messages         []Message         `json:"messages"`
+	InlineContext    *InlineContext     `json:"inlineContext,omitempty"`
+	DataAgentContext *DataAgentContext  `json:"dataAgentContext,omitempty"`
+	ClientIdEnum     string            `json:"clientIdEnum"`
 }
 
 type Config struct {
@@ -131,6 +136,7 @@ type Config struct {
 	Description  string                 `yaml:"description" validate:"required"`
 	AuthRequired []string               `yaml:"authRequired"`
 	Annotations  *tools.ToolAnnotations `yaml:"annotations,omitempty"`
+	DataAgent    string                 `yaml:"dataAgent,omitempty"`
 }
 
 // validate interface
@@ -277,15 +283,22 @@ func (t Tool) Invoke(ctx context.Context, resourceMgr tools.SourceProvider, para
 	}
 
 	payload := CAPayload{
-		Messages: []Message{{UserMessage: UserMessage{Text: userQuery}}},
-		InlineContext: InlineContext{
+		Messages:     []Message{{UserMessage: UserMessage{Text: userQuery}}},
+		ClientIdEnum: util.GDAClientID,
+	}
+
+	if t.DataAgent != "" {
+		payload.DataAgentContext = &DataAgentContext{
+			DataAgent: t.DataAgent,
+		}
+	} else {
+		payload.InlineContext = &InlineContext{
 			SystemInstruction: instructions,
 			DatasourceReferences: DatasourceReferences{
 				Looker: lers,
 			},
 			Options: ConversationOptions{Chart: ChartOptions{Image: ImageOptions{NoImage: map[string]any{}}}},
-		},
-		ClientIdEnum: util.GDAClientID,
+		}
 	}
 
 	// Call the streaming API
