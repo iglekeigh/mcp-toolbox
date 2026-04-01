@@ -177,7 +177,24 @@ func RunMCPCustomToolCallMethod(t *testing.T, toolName string, arguments map[str
 	if len(mcpResp.Result.Content) == 0 {
 		t.Fatalf("%s returned empty content field", toolName)
 	}
-	got := mcpResp.Result.Content[0].Text
+
+	// Gather all the text blocks
+	var blocks []string
+	for _, content := range mcpResp.Result.Content {
+		if content.Type == "text" {
+			blocks = append(blocks, strings.TrimSpace(content.Text))
+		}
+	}
+
+	var got string
+	// If the test is expecting a JSON array, format the stitched blocks as a JSON array
+	if want != "" && strings.HasPrefix(strings.TrimSpace(want), "[") {
+		got = "[" + strings.Join(blocks, ",") + "]"
+	} else {
+		// Otherwise, just concatenate them normally (for single responses or errors)
+		got = strings.Join(blocks, "")
+	}
+
 	if !strings.Contains(got, want) {
 		t.Fatalf(`expected %q to contain %q`, got, want)
 	}
@@ -278,7 +295,24 @@ func RunMCPToolInvokeTest(t *testing.T, select1Want string, options ...InvokeTes
 			if len(mcpResp.Result.Content) == 0 {
 				t.Fatalf("%s returned empty content field", tc.toolName)
 			}
-			got := mcpResp.Result.Content[0].Text
+
+			// Gather all the text blocks
+			var blocks []string
+			for _, content := range mcpResp.Result.Content {
+				if content.Type == "text" {
+					blocks = append(blocks, strings.TrimSpace(content.Text))
+				}
+			}
+
+			var got string
+			// If the test is expecting a JSON array, format the stitched blocks as a JSON array
+			if tc.wantResult != "" && strings.HasPrefix(strings.TrimSpace(tc.wantResult), "[") {
+				got = "[" + strings.Join(blocks, ",") + "]"
+			} else {
+				// Otherwise, just concatenate them normally (for single responses or errors)
+				got = strings.Join(blocks, "")
+			}
+
 			if !strings.Contains(got, tc.wantResult) {
 				t.Fatalf(`expected %q to contain %q`, got, tc.wantResult)
 			}
@@ -370,7 +404,7 @@ func GetExecuteSQLMCPExpectedTools() []MCPToolManifest {
 			Description: "Tool to execute sql",
 			InputSchema: map[string]any{
 				"type":       "object",
-				"properties": map[string]any{"sql": map[string]any{"type": "string", "description": "A valid SQL statement to execute."}},
+				"properties": map[string]any{"sql": map[string]any{"type": "string", "description": "The sql to execute."}},
 				"required":   []any{"sql"},
 			},
 		},
@@ -379,7 +413,7 @@ func GetExecuteSQLMCPExpectedTools() []MCPToolManifest {
 			Description: "Tool to execute sql",
 			InputSchema: map[string]any{
 				"type":       "object",
-				"properties": map[string]any{"sql": map[string]any{"type": "string", "description": "A valid SQL statement to execute."}},
+				"properties": map[string]any{"sql": map[string]any{"type": "string", "description": "The sql to execute."}},
 				"required":   []any{"sql"},
 			},
 		},
