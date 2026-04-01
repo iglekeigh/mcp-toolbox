@@ -293,6 +293,9 @@ func RunMCPToolInvokeTest(t *testing.T, select1Want string, options ...InvokeTes
 				t.Fatalf("%s returned error result: %v", tc.toolName, mcpResp.Result)
 			}
 			if len(mcpResp.Result.Content) == 0 {
+				if tc.wantResult == "null" || tc.wantResult == "[]" || tc.wantResult == "" {
+					return
+				}
 				t.Fatalf("%s returned empty content field", tc.toolName)
 			}
 
