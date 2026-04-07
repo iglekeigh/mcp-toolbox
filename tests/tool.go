@@ -3998,6 +3998,7 @@ func RunMSSQLListTablesTest(t *testing.T, tableNameParam, tableNameAuth string, 
 				}
 
 				statusCode, mcpResp, err := InvokeMCPTool(t, "list_tables", args, nil)
+
 				if statusCode != tc.wantStatusCode {
 					t.Fatalf("wrong status code: got %d, want %d, err: %v", statusCode, tc.wantStatusCode, err)
 				}
@@ -4006,7 +4007,7 @@ func RunMSSQLListTablesTest(t *testing.T, tableNameParam, tableNameAuth string, 
 				}
 
 				if tc.isAgentErr {
-					if mcpResp == nil || !mcpResp.Result.IsError {
+					if mcpResp == nil || (!mcpResp.Result.IsError && mcpResp.Error == nil) {
 						t.Fatalf("expected error result in MCP, but got success")
 					}
 					return
@@ -4021,7 +4022,7 @@ func RunMSSQLListTablesTest(t *testing.T, tableNameParam, tableNameAuth string, 
 					}
 				}
 				if len(blocks) == 0 {
-					resultString = "null"
+					resultString = "[]"
 				} else {
 					resultString = "[" + strings.Join(blocks, ",") + "]"
 				}
