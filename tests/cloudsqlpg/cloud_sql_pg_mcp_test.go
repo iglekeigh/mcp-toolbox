@@ -69,9 +69,7 @@ func getCloudSQLPgVars(t *testing.T) map[string]any {
 	}
 }
 
-// Copied over from cloud_sql_pg.go
 func initCloudSQLPgConnectionPool(project, region, instance, ip_type, user, pass, dbname string) (*pgxpool.Pool, error) {
-	// Configure the driver to connect to the database
 	dsn := fmt.Sprintf("user=%s password=%s dbname=%s sslmode=disable", user, pass, dbname)
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
