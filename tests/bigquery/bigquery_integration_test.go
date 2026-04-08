@@ -1238,7 +1238,6 @@ func runBigQueryExecuteSqlToolInvokeDryRunTest(t *testing.T, datasetName string)
 		}
 	})
 }
-}
 
 func runBigQueryForecastToolInvokeTest(t *testing.T, tableName string) {
 	runBigQueryForecastToolInvokeTestCommon(t, tableName, func(t *testing.T, info ToolTestInfo) {
@@ -1321,7 +1320,6 @@ func runBigQueryAnalyzeContributionToolInvokeTest(t *testing.T, tableName string
 		}
 	})
 }
-}
 
 func runBigQueryDataTypeTests(t *testing.T) {
 	runBigQueryDataTypeTestsCommon(t, func(t *testing.T, info ToolTestInfo) {
@@ -1362,7 +1360,6 @@ func runBigQueryDataTypeTests(t *testing.T) {
 			t.Fatalf("unexpected value: got %q, want %q", got, info.Want)
 		}
 	})
-}
 }
 
 func runBigQueryListDatasetToolInvokeTest(t *testing.T, datasetWant string) {
@@ -1405,7 +1402,6 @@ func runBigQueryListDatasetToolInvokeTest(t *testing.T, datasetWant string) {
 		}
 	})
 }
-}
 
 func runBigQueryGetDatasetInfoToolInvokeTest(t *testing.T, datasetName, datasetInfoWant string) {
 	runBigQueryGetDatasetInfoToolInvokeTestCommon(t, datasetName, datasetInfoWant, func(t *testing.T, info ToolTestInfo) {
@@ -1446,7 +1442,6 @@ func runBigQueryGetDatasetInfoToolInvokeTest(t *testing.T, datasetName, datasetI
 			t.Fatalf("expected %q to contain %q, but it did not", got, info.Want)
 		}
 	})
-}
 }
 
 func runBigQueryListTableIdsToolInvokeTest(t *testing.T, datasetName, tablename_want string) {
@@ -1489,7 +1484,6 @@ func runBigQueryListTableIdsToolInvokeTest(t *testing.T, datasetName, tablename_
 		}
 	})
 }
-}
 
 func runBigQueryGetTableInfoToolInvokeTest(t *testing.T, datasetName, tableName, tableInfoWant string) {
 	runBigQueryGetTableInfoToolInvokeTestCommon(t, datasetName, tableName, tableInfoWant, func(t *testing.T, info ToolTestInfo) {
@@ -1530,7 +1524,6 @@ func runBigQueryGetTableInfoToolInvokeTest(t *testing.T, datasetName, tableName,
 			t.Fatalf("expected %q to contain %q, but it did not", got, info.Want)
 		}
 	})
-}
 }
 
 func runBigQueryConversationalAnalyticsInvokeTest(t *testing.T, datasetName, tableName, dataInsightsWant string) {
@@ -1609,7 +1602,6 @@ func runBigQueryConversationalAnalyticsInvokeTest(t *testing.T, datasetName, tab
 			t.Fatalf("response did not match the expected pattern.\nFull response:\n%s", got)
 		}
 	})
-}
 }
 
 func runListDatasetIdsWithRestriction(t *testing.T, allowedDatasetName1, allowedDatasetName2 string) {
@@ -2086,7 +2078,6 @@ func runBigQuerySearchCatalogToolInvokeTest(t *testing.T, datasetName string, ta
 			}
 		}
 	})
-}
 }
 
 func runForecastWithRestriction(t *testing.T, allowedTableFullName, disallowedTableFullName string) {

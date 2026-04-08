@@ -139,49 +139,62 @@ func TestBigQueryToolEndpointsMCP(t *testing.T) {
 
 func getMcpRunner(t *testing.T) TestRunner {
 	return func(t *testing.T, info ToolTestInfo) {
-		parts := strings.Split(info.Api, "/")
-		toolName := parts[len(parts)-2]
-
-		var args map[string]any
-		if info.RequestBody != nil {
-			bodyBytes, _ := io.ReadAll(info.RequestBody)
-			json.Unmarshal(bodyBytes, &args)
-		}
-
-		statusCode, mcpResp, err := tests.InvokeMCPTool(t, toolName, args, info.RequestHeader)
-		if err != nil {
-			t.Fatalf("native error executing %s: %s", toolName, err)
-		}
-
-		if info.IsErr {
-			if statusCode != http.StatusOK || mcpResp.Result.IsError {
-				return
-			}
-			t.Fatal("expected error result but got success")
+		got, handled := invokeMCPToolForTest(t, info)
+		if handled {
 			return
 		}
-
-		if statusCode != http.StatusOK {
-			t.Fatalf("expected status 200, got %d", statusCode)
-		}
-
-		if mcpResp.Result.IsError {
-			t.Fatalf("%s returned error result: %v", toolName, mcpResp.Result)
-		}
-
-		var blocks []string
-		for _, content := range mcpResp.Result.Content {
-			if content.Type == "text" {
-				blocks = append(blocks, strings.TrimSpace(content.Text))
-			}
-		}
-
-		got := strings.Join(blocks, "")
 
 		if info.Want != "" && !strings.Contains(got, info.Want) {
 			t.Fatalf("unexpected result: got %s, want to contain %s", got, info.Want)
 		}
 	}
+}
+
+func invokeMCPToolForTest(t *testing.T, info ToolTestInfo) (string, bool) {
+	parts := strings.Split(info.Api, "/")
+	toolName := parts[len(parts)-2]
+
+	var args map[string]any
+	if info.RequestBody != nil {
+		bodyBytes, err := io.ReadAll(info.RequestBody)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
+		err = json.Unmarshal(bodyBytes, &args)
+		if err != nil {
+			t.Fatalf("failed to unmarshal request body: %v", err)
+		}
+	}
+
+	statusCode, mcpResp, err := tests.InvokeMCPTool(t, toolName, args, info.RequestHeader)
+	if err != nil {
+		t.Fatalf("native error executing %s: %s", toolName, err)
+	}
+
+	if info.IsErr {
+		if statusCode != http.StatusOK || mcpResp.Result.IsError {
+			return "", true
+		}
+		t.Fatal("expected error result but got success")
+		return "", false
+	}
+
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+
+	if mcpResp.Result.IsError {
+		t.Fatalf("%s returned error result: %v", toolName, mcpResp.Result)
+	}
+
+	var blocks []string
+	for _, content := range mcpResp.Result.Content {
+		if content.Type == "text" {
+			blocks = append(blocks, strings.TrimSpace(content.Text))
+		}
+	}
+
+	return strings.Join(blocks, ""), false
 }
 
 func runBigQueryExecuteSqlToolInvokeTestMCP(t *testing.T, select1Want, invokeParamWant, tableNameParam, ddlWant string) {
@@ -214,44 +227,10 @@ func runBigQueryGetTableInfoToolInvokeTestMCP(t *testing.T, datasetName, tableNa
 
 func runBigQueryConversationalAnalyticsInvokeTestMCP(t *testing.T, datasetName, tableName, dataInsightsWant string) {
 	runBigQueryConversationalAnalyticsInvokeTestCommon(t, datasetName, tableName, dataInsightsWant, func(t *testing.T, info ToolTestInfo) {
-		parts := strings.Split(info.Api, "/")
-		toolName := parts[len(parts)-2]
-
-		var args map[string]any
-		if info.RequestBody != nil {
-			bodyBytes, _ := io.ReadAll(info.RequestBody)
-			json.Unmarshal(bodyBytes, &args)
-		}
-
-		statusCode, mcpResp, err := tests.InvokeMCPTool(t, toolName, args, info.RequestHeader)
-		if err != nil {
-			t.Fatalf("native error executing %s: %s", toolName, err)
-		}
-
-		if info.IsErr {
-			if statusCode != http.StatusOK || mcpResp.Result.IsError {
-				return
-			}
-			t.Fatal("expected error result but got success")
+		got, handled := invokeMCPToolForTest(t, info)
+		if handled {
 			return
 		}
-
-		if statusCode != http.StatusOK {
-			t.Fatalf("expected status 200, got %d", statusCode)
-		}
-
-		if mcpResp.Result.IsError {
-			t.Fatalf("%s returned error result: %v", toolName, mcpResp.Result)
-		}
-
-		var blocks []string
-		for _, content := range mcpResp.Result.Content {
-			if content.Type == "text" {
-				blocks = append(blocks, strings.TrimSpace(content.Text))
-			}
-		}
-
-		got := strings.Join(blocks, "")
 
 		wantPattern := regexp.MustCompile(info.Want)
 		if !wantPattern.MatchString(got) {
@@ -262,44 +241,10 @@ func runBigQueryConversationalAnalyticsInvokeTestMCP(t *testing.T, datasetName, 
 
 func runBigQuerySearchCatalogToolInvokeTestMCP(t *testing.T, datasetName string, tableName string) {
 	runBigQuerySearchCatalogToolInvokeTestCommon(t, datasetName, tableName, func(t *testing.T, info ToolTestInfo) {
-		parts := strings.Split(info.Api, "/")
-		toolName := parts[len(parts)-2]
-
-		var args map[string]any
-		if info.RequestBody != nil {
-			bodyBytes, _ := io.ReadAll(info.RequestBody)
-			json.Unmarshal(bodyBytes, &args)
-		}
-
-		statusCode, mcpResp, err := tests.InvokeMCPTool(t, toolName, args, info.RequestHeader)
-		if err != nil {
-			t.Fatalf("native error executing %s: %s", toolName, err)
-		}
-
-		if info.IsErr {
-			if statusCode != http.StatusOK || mcpResp.Result.IsError {
-				return
-			}
-			t.Fatal("expected error result but got success")
+		got, handled := invokeMCPToolForTest(t, info)
+		if handled {
 			return
 		}
-
-		if statusCode != http.StatusOK {
-			t.Fatalf("expected status 200, got %d", statusCode)
-		}
-
-		if mcpResp.Result.IsError {
-			t.Fatalf("%s returned error result: %v", toolName, mcpResp.Result)
-		}
-
-		var blocks []string
-		for _, content := range mcpResp.Result.Content {
-			if content.Type == "text" {
-				blocks = append(blocks, strings.TrimSpace(content.Text))
-			}
-		}
-
-		got := strings.Join(blocks, "")
 
 		var entries []any
 		if err := json.Unmarshal([]byte(got), &entries); err != nil {
@@ -325,108 +270,17 @@ func runBigQuerySearchCatalogToolInvokeTestMCP(t *testing.T, datasetName string,
 
 func runBigQueryDataTypeTestsMCP(t *testing.T) {
 	runBigQueryDataTypeTestsCommon(t, func(t *testing.T, info ToolTestInfo) {
-		parts := strings.Split(info.Api, "/")
-		toolName := parts[len(parts)-2]
-
-		var args map[string]any
-		if info.RequestBody != nil {
-			bodyBytes, _ := io.ReadAll(info.RequestBody)
-			json.Unmarshal(bodyBytes, &args)
-		}
-
-		statusCode, mcpResp, err := tests.InvokeMCPTool(t, toolName, args, info.RequestHeader)
-		if err != nil {
-			t.Fatalf("native error executing %s: %s", toolName, err)
-		}
-
-		if info.IsErr {
-			if statusCode != http.StatusOK || mcpResp.Result.IsError {
-				return
-			}
-			t.Fatal("expected error result but got success")
+		got, handled := invokeMCPToolForTest(t, info)
+		if handled {
 			return
 		}
 
-		if statusCode != http.StatusOK {
-			t.Fatalf("expected status 200, got %d", statusCode)
-		}
-
-		if mcpResp.Result.IsError {
-			t.Fatalf("%s returned error result: %v", toolName, mcpResp.Result)
-		}
-
-		var blocks []string
-		for _, content := range mcpResp.Result.Content {
-			if content.Type == "text" {
-				blocks = append(blocks, strings.TrimSpace(content.Text))
-			}
-		}
-
-		got := strings.Join(blocks, "")
-
-		if got != info.Want {
-			t.Fatalf("unexpected value: got %q, want %q", got, info.Want)
+		if info.Want != "" && !strings.Contains(got, info.Want) {
+			t.Fatalf("unexpected result: got %s, want to contain %s", got, info.Want)
 		}
 	})
 }
 
 func runBigQueryExecuteSqlToolInvokeDryRunTestMCP(t *testing.T, datasetName string) {
 	runBigQueryExecuteSqlToolInvokeDryRunTestCommon(t, datasetName, getMcpRunner(t))
-}
-
-// Helper function to run the loop and avoid duplication
-func runMCPTestLoop(t *testing.T, tcs []struct {
-	name          string
-	api           string
-	requestHeader map[string]string
-	requestBody   io.Reader
-	want          string
-	isErr         bool
-}) {
-	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			parts := strings.Split(tc.api, "/")
-			toolName := parts[len(parts)-2]
-
-			var args map[string]any
-			if tc.requestBody != nil {
-				bodyBytes, _ := io.ReadAll(tc.requestBody)
-				json.Unmarshal(bodyBytes, &args)
-			}
-
-			statusCode, mcpResp, err := tests.InvokeMCPTool(t, toolName, args, tc.requestHeader)
-			if err != nil {
-				t.Fatalf("native error executing %s: %s", toolName, err)
-			}
-
-			if tc.isErr {
-				if statusCode != http.StatusOK || mcpResp.Result.IsError {
-					return
-				}
-				t.Fatal("expected error result but got success")
-				return
-			}
-
-			if statusCode != http.StatusOK {
-				t.Fatalf("expected status 200, got %d", statusCode)
-			}
-
-			if mcpResp.Result.IsError {
-				t.Fatalf("%s returned error result: %v", toolName, mcpResp.Result)
-			}
-
-			var blocks []string
-			for _, content := range mcpResp.Result.Content {
-				if content.Type == "text" {
-					blocks = append(blocks, strings.TrimSpace(content.Text))
-				}
-			}
-
-			got := strings.Join(blocks, "")
-
-			if !strings.Contains(got, tc.want) {
-				t.Fatalf("unexpected result: got %s, want to contain %s", got, tc.want)
-			}
-		})
-	}
 }
