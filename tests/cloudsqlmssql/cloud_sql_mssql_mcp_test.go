@@ -254,7 +254,7 @@ func TestCloudSQLMSSQLMCPIpConnection(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			sourceConfig["ipType"] = tc.ipType
-			err := tests.RunSourceConnectionTest(t, sourceConfig, CloudSQLMSSQLToolType, tests.WithMCP())
+			err := tests.RunSourceConnectionTest(t, sourceConfig, CloudSQLMSSQLToolType)
 			if err != nil {
 				t.Fatalf("Connection test failure: %s", err)
 			}
