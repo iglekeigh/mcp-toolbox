@@ -16,18 +16,163 @@ package cloudsqlmssql
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
+	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"cloud.google.com/go/cloudsqlconn"
+	"cloud.google.com/go/cloudsqlconn/sqlserver/mssql"
 	"github.com/google/uuid"
 	"github.com/googleapis/genai-toolbox/internal/testutils"
 	"github.com/googleapis/genai-toolbox/tests"
 )
 
-func TestCloudSQLMSSQLMCPToolEndpoints(t *testing.T) {
+var (
+	CloudSQLMSSQLSourceType = "cloud-sql-mssql"
+	CloudSQLMSSQLToolType   = "mssql-sql"
+	CloudSQLMSSQLProject    = os.Getenv("CLOUD_SQL_MSSQL_PROJECT")
+	CloudSQLMSSQLRegion     = os.Getenv("CLOUD_SQL_MSSQL_REGION")
+	CloudSQLMSSQLInstance   = os.Getenv("CLOUD_SQL_MSSQL_INSTANCE")
+	CloudSQLMSSQLDatabase   = os.Getenv("CLOUD_SQL_MSSQL_DATABASE")
+	CloudSQLMSSQLUser       = os.Getenv("CLOUD_SQL_MSSQL_USER")
+	CloudSQLMSSQLPass       = os.Getenv("CLOUD_SQL_MSSQL_PASS")
+)
+
+func getCloudSQLMSSQLVars(t *testing.T) map[string]any {
+	switch "" {
+	case CloudSQLMSSQLProject:
+		t.Fatal("'CLOUD_SQL_MSSQL_PROJECT' not set")
+	case CloudSQLMSSQLRegion:
+		t.Fatal("'CLOUD_SQL_MSSQL_REGION' not set")
+	case CloudSQLMSSQLInstance:
+		t.Fatal("'CLOUD_SQL_MSSQL_INSTANCE' not set")
+	case CloudSQLMSSQLDatabase:
+		t.Fatal("'CLOUD_SQL_MSSQL_DATABASE' not set")
+	case CloudSQLMSSQLUser:
+		t.Fatal("'CLOUD_SQL_MSSQL_USER' not set")
+	case CloudSQLMSSQLPass:
+		t.Fatal("'CLOUD_SQL_MSSQL_PASS' not set")
+	}
+
+	return map[string]any{
+		"type":     CloudSQLMSSQLSourceType,
+		"project":  CloudSQLMSSQLProject,
+		"instance": CloudSQLMSSQLInstance,
+		"region":   CloudSQLMSSQLRegion,
+		"database": CloudSQLMSSQLDatabase,
+		"user":     CloudSQLMSSQLUser,
+		"password": CloudSQLMSSQLPass,
+	}
+}
+
+// Copied over from cloud_sql_mssql.go
+func initCloudSQLMSSQLConnection(project, region, instance, ipType, user, pass, dbname string) (*sql.DB, error) {
+	// Create dsn
+	query := fmt.Sprintf("database=%s&cloudsql=%s:%s:%s", dbname, project, region, instance)
+	url := &url.URL{
+		Scheme:   "sqlserver",
+		User:     url.UserPassword(user, pass),
+		RawQuery: query,
+	}
+
+	// Get dial options
+	dialOpts, err := tests.GetCloudSQLDialOpts(ipType)
+	if err != nil {
+		return nil, err
+	}
+
+	// Register sql server driver
+	if !slices.Contains(sql.Drivers(), "cloudsql-sqlserver-driver") {
+		_, err := mssql.RegisterDriver("cloudsql-sqlserver-driver", cloudsqlconn.WithDefaultDialOptions(dialOpts...))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Open database connection
+	db, err := sql.Open(
+		"cloudsql-sqlserver-driver",
+		url.String(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
+func TestCloudSQLMSSQLListTools(t *testing.T) {
+	if os.Getenv("CLOUD_SQL_MSSQL_PROJECT") == "" {
+		t.Skip("Skipping Cloud SQL MSSQL MCP test because environment variables are not set")
+	}
+
+	sourceConfig := getCloudSQLMSSQLVars(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	// create dummy table names for config generation
+	tableNameParam := "dummy_param_table"
+	tableNameAuth := "dummy_auth_table"
+
+	_, _, paramToolStmt, idParamToolStmt, nameParamToolStmt, arrayToolStmt, _ := tests.GetMSSQLParamToolInfo(tableNameParam)
+	_, _, authToolStmt, _ := tests.GetMSSQLAuthToolInfo(tableNameAuth)
+
+	toolsConfig := tests.GetToolsConfig(sourceConfig, CloudSQLMSSQLToolType, paramToolStmt, idParamToolStmt, nameParamToolStmt, arrayToolStmt, authToolStmt)
+	toolsConfig = tests.AddMSSQLExecuteSqlConfig(t, toolsConfig)
+	tmplSelectCombined, tmplSelectFilterCombined := tests.GetMSSQLTmplToolStatement()
+	toolsConfig = tests.AddTemplateParamConfig(t, toolsConfig, CloudSQLMSSQLToolType, tmplSelectCombined, tmplSelectFilterCombined, "")
+	toolsConfig = tests.AddMSSQLPrebuiltToolConfig(t, toolsConfig)
+
+	cmd, cleanup, err := tests.StartCmd(ctx, toolsConfig)
+	if err != nil {
+		t.Fatalf("command initialization returned an error: %s", err)
+	}
+	defer cleanup()
+
+	waitCtx, cancelWait := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelWait()
+	out, err := testutils.WaitForString(waitCtx, regexp.MustCompile(`Server ready to serve`), cmd.Out)
+	if err != nil {
+		t.Logf("toolbox command logs: \n%s", out)
+		t.Fatalf("toolbox didn't start successfully: %s", err)
+	}
+
+	// Verify the tools list manifest
+	expectedTools := tests.GetBaseMCPExpectedTools()
+	expectedTools = append(expectedTools, tests.GetExecuteSQLMCPExpectedTools()...)
+	expectedTools = append(expectedTools, tests.GetTemplateParamMCPExpectedTools()...)
+	expectedTools = append(expectedTools, tests.MCPToolManifest{
+		Name:        "list_tables",
+		Description: "Lists tables in the database.",
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"table_names": map[string]any{
+					"default":     "",
+					"description": "Optional: A comma-separated list of table names. If empty, details for all tables will be listed.",
+					"type":        "string",
+				},
+				"output_format": map[string]any{
+					"default":     "detailed",
+					"description": "Optional: Use 'simple' for names only or 'detailed' for full info.",
+					"type":        "string",
+				},
+			},
+			"required": []any{},
+		},
+	})
+
+	t.Run("verify tools/list registry returns complete manifest", func(t *testing.T) {
+		tests.RunMCPToolsListMethod(t, expectedTools)
+	})
+}
+
+func TestCloudSQLMSSQLCallTool(t *testing.T) {
 	if os.Getenv("CLOUD_SQL_MSSQL_PROJECT") == "" {
 		t.Skip("Skipping Cloud SQL MSSQL MCP test because environment variables are not set")
 	}
@@ -83,38 +228,36 @@ func TestCloudSQLMSSQLMCPToolEndpoints(t *testing.T) {
 	// Get configs for tests
 	_, mcpMyFailToolWant, _, mcpSelect1Want := tests.GetMSSQLWants()
 
-	// Verify the tools list manifest
-	expectedTools := tests.GetBaseMCPExpectedTools()
-	expectedTools = append(expectedTools, tests.GetExecuteSQLMCPExpectedTools()...)
-	expectedTools = append(expectedTools, tests.GetTemplateParamMCPExpectedTools()...)
-	expectedTools = append(expectedTools, tests.MCPToolManifest{
-		Name:        "list_tables",
-		Description: "Lists tables in the database.",
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"table_names": map[string]any{
-					"default":     "",
-					"description": "Optional: A comma-separated list of table names. If empty, details for all tables will be listed.",
-					"type":        "string",
-				},
-				"output_format": map[string]any{
-					"default":     "detailed",
-					"description": "Optional: Use 'simple' for names only or 'detailed' for full info.",
-					"type":        "string",
-				},
-			},
-			"required": []any{},
-		},
-	})
-
-	t.Run("verify tools/list registry returns complete manifest", func(t *testing.T) {
-		tests.RunMCPToolsListMethod(t, expectedTools)
-	})
-
 	// Run tests via MCP
 	tests.RunMCPToolCallMethod(t, mcpMyFailToolWant, mcpSelect1Want)
 
 	// Run specific MSSQL tool tests via MCP
 	tests.RunMSSQLListTablesTest(t, tableNameParam, tableNameAuth, tests.WithMCPExec())
+}
+
+func TestCloudSQLMSSQLMCPIpConnection(t *testing.T) {
+	sourceConfig := getCloudSQLMSSQLVars(t)
+
+	tcs := []struct {
+		name   string
+		ipType string
+	}{
+		{
+			name:   "public ip",
+			ipType: "public",
+		},
+		{
+			name:   "private ip",
+			ipType: "private",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			sourceConfig["ipType"] = tc.ipType
+			err := tests.RunSourceConnectionTest(t, sourceConfig, CloudSQLMSSQLToolType, tests.WithMCP())
+			if err != nil {
+				t.Fatalf("Connection test failure: %s", err)
+			}
+		})
+	}
 }
