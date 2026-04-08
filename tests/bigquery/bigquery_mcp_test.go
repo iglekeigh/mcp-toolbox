@@ -181,7 +181,7 @@ func invokeMCPToolForTest(t *testing.T, info ToolTestInfo) (string, bool) {
 	got := strings.Join(blocks, "")
 
 	isActualErr := statusCode != http.StatusOK || (mcpResp != nil && (mcpResp.Result.IsError || mcpResp.Error != nil))
-	
+
 	if info.IsErr {
 		if isActualErr {
 			// Extract error message for comparison
