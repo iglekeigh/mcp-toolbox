@@ -69,7 +69,7 @@ func getCloudSQLPgVars(t *testing.T) map[string]any {
 	}
 }
 
-func initCloudSQLPgConnectionPool(project, region, instance, ip_type, user, pass, dbname string) (*pgxpool.Pool, error) {
+func initCloudSQLPgConnectionPool(ctx context.Context, project, region, instance, ip_type, user, pass, dbname string) (*pgxpool.Pool, error) {
 	dsn := fmt.Sprintf("user=%s password=%s dbname=%s sslmode=disable", user, pass, dbname)
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
@@ -81,7 +81,7 @@ func initCloudSQLPgConnectionPool(project, region, instance, ip_type, user, pass
 	if err != nil {
 		return nil, err
 	}
-	d, err := cloudsqlconn.NewDialer(context.Background(), cloudsqlconn.WithDefaultDialOptions(dialOpts...))
+	d, err := cloudsqlconn.NewDialer(ctx, cloudsqlconn.WithDefaultDialOptions(dialOpts...))
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse connection uri: %w", err)
 	}
@@ -93,7 +93,7 @@ func initCloudSQLPgConnectionPool(project, region, instance, ip_type, user, pass
 	}
 
 	// Interact with the driver directly as you normally would
-	pool, err := pgxpool.NewWithConfig(context.Background(), config)
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func TestCloudSQLPgCallTool(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	pool, err := initCloudSQLPgConnectionPool(CloudSQLPostgresProject, CloudSQLPostgresRegion, CloudSQLPostgresInstance, "public", CloudSQLPostgresUser, CloudSQLPostgresPass, CloudSQLPostgresDatabase)
+	pool, err := initCloudSQLPgConnectionPool(ctx, CloudSQLPostgresProject, CloudSQLPostgresRegion, CloudSQLPostgresInstance, "public", CloudSQLPostgresUser, CloudSQLPostgresPass, CloudSQLPostgresDatabase)
 	if err != nil {
 		t.Fatalf("unable to create Cloud SQL connection pool: %s", err)
 	}
