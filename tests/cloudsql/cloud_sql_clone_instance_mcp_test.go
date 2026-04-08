@@ -17,6 +17,7 @@ package cloudsql
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -26,9 +27,99 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/googleapis/genai-toolbox/internal/testutils"
 	"github.com/googleapis/genai-toolbox/tests"
+	sqladmin "google.golang.org/api/sqladmin/v1"
+
+	_ "github.com/googleapis/genai-toolbox/internal/tools/cloudsql/cloudsqlcloneinstance"
 )
+
+var (
+	cloneInstanceToolType = "cloud-sql-clone-instance"
+)
+
+type cloneInstanceTransport struct {
+	transport http.RoundTripper
+	url       *url.URL
+}
+
+func (t *cloneInstanceTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if strings.HasPrefix(req.URL.String(), "https://sqladmin.googleapis.com") {
+		req.URL.Scheme = t.url.Scheme
+		req.URL.Host = t.url.Host
+	}
+	return t.transport.RoundTrip(req)
+}
+
+type masterCloneInstanceHandler struct {
+	t *testing.T
+}
+
+func (h *masterCloneInstanceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !strings.Contains(r.UserAgent(), "genai-toolbox/") {
+		h.t.Errorf("User-Agent header not found")
+	}
+	var body sqladmin.InstancesCloneRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		h.t.Fatalf("failed to decode request body: %v", err)
+	} else {
+		h.t.Logf("Received request body: %+v", body)
+	}
+
+	var expectedBody sqladmin.InstancesCloneRequest
+	var response any
+	var statusCode int
+
+	switch body.CloneContext.DestinationInstanceName {
+	case "cloned-instance":
+		expectedBody = sqladmin.InstancesCloneRequest{
+			CloneContext: &sqladmin.CloneContext{
+				DestinationInstanceName: "cloned-instance",
+			},
+		}
+		response = map[string]any{"name": "op1", "status": "PENDING"}
+		statusCode = http.StatusOK
+	case "cloned-pitr-instance":
+		expectedBody = sqladmin.InstancesCloneRequest{
+			CloneContext: &sqladmin.CloneContext{
+				DestinationInstanceName: "cloned-pitr-instance",
+				PointInTime:             "2025-11-04T10:00:00Z",
+			},
+		}
+		response = map[string]any{"name": "op2", "status": "PENDING"}
+		statusCode = http.StatusOK
+	default:
+		http.Error(w, fmt.Sprintf("unhandled destination instance name: %s", body.CloneContext.DestinationInstanceName), http.StatusInternalServerError)
+		return
+	}
+
+	if diff := cmp.Diff(expectedBody, body); diff != "" {
+		h.t.Errorf("unexpected request body (-want +got):\n%s", diff)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func getCloneInstanceToolsConfig() map[string]any {
+	return map[string]any{
+		"sources": map[string]any{
+			"my-cloud-sql-source": map[string]any{
+				"type": "cloud-sql-admin",
+			},
+		},
+		"tools": map[string]any{
+			"clone-instance": map[string]any{
+				"type":   cloneInstanceToolType,
+				"source": "my-cloud-sql-source",
+			},
+		},
+	}
+}
 
 func TestCloneInstanceToolMCP(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
