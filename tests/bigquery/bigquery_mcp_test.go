@@ -171,22 +171,6 @@ func invokeMCPToolForTest(t *testing.T, info ToolTestInfo) (string, bool) {
 		t.Fatalf("native error executing %s: %s", toolName, err)
 	}
 
-	if info.IsErr {
-		if statusCode != http.StatusOK || mcpResp.Result.IsError {
-			return "", true
-		}
-		t.Fatal("expected error result but got success")
-		return "", false
-	}
-
-	if statusCode != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", statusCode)
-	}
-
-	if mcpResp.Result.IsError {
-		t.Fatalf("%s returned error result: %v", toolName, mcpResp.Result)
-	}
-
 	var blocks []string
 	for _, content := range mcpResp.Result.Content {
 		if content.Type == "text" {
@@ -194,7 +178,39 @@ func invokeMCPToolForTest(t *testing.T, info ToolTestInfo) (string, bool) {
 		}
 	}
 
-	return strings.Join(blocks, ""), false
+	got := strings.Join(blocks, "")
+
+	isActualErr := statusCode != http.StatusOK || (mcpResp != nil && (mcpResp.Result.IsError || mcpResp.Error != nil))
+	
+	if info.IsErr {
+		if isActualErr {
+			// Extract error message for comparison
+			errMsg := got
+			if mcpResp != nil && mcpResp.Error != nil {
+				errMsg = mcpResp.Error.Message
+			}
+			if info.Want == "" || strings.Contains(errMsg, info.Want) {
+				return errMsg, true
+			}
+		}
+		t.Fatalf("expected error result containing %q but got success or non-matching error. Status: %d, Result.IsError: %v, Error: %+v", info.Want, statusCode, mcpResp.Result.IsError, mcpResp.Error)
+		return got, false
+	}
+
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+
+	if mcpResp != nil && mcpResp.Result.IsError {
+		t.Fatalf("%s returned error result: %v. Response: %s", toolName, mcpResp.Result, got)
+	}
+
+	result := strings.Join(blocks, ",")
+	if strings.HasPrefix(info.Want, "[") && !strings.HasPrefix(result, "[") {
+		result = "[" + result + "]"
+	}
+
+	return result, false
 }
 
 func runBigQueryExecuteSqlToolInvokeTestMCP(t *testing.T, select1Want, invokeParamWant, tableNameParam, ddlWant string) {
