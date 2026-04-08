@@ -16,7 +16,6 @@ package cloudsqlmssql
 
 import (
 	"context"
-	"database/sql"
 	"regexp"
 	"strings"
 	"testing"
