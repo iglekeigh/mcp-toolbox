@@ -26,8 +26,6 @@ import (
 	"github.com/googleapis/mcp-toolbox/tests"
 )
 
-
-
 func TestCloudSQLMSSQLToolEndpoints(t *testing.T) {
 	sourceConfig := getCloudSQLMSSQLVars(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
