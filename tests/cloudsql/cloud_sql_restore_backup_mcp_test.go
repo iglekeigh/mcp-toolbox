@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -151,8 +152,16 @@ func TestRestoreBackupToolMCP(t *testing.T) {
 
 			got := strings.Join(blocks, "")
 
-			if got != tc.want {
-				t.Fatalf("unexpected result string:\n got: %s\nwant: %s", got, tc.want)
+			var gotMap, wantMap map[string]any
+			if err := json.Unmarshal([]byte(got), &gotMap); err != nil {
+				t.Fatalf("failed to unmarshal result: %v\nraw: %s", err, got)
+			}
+			if err := json.Unmarshal([]byte(tc.want), &wantMap); err != nil {
+				t.Fatalf("failed to unmarshal want: %v", err)
+			}
+
+			if !reflect.DeepEqual(gotMap, wantMap) {
+				t.Fatalf("unexpected result: got %+v, want %+v", gotMap, wantMap)
 			}
 		})
 	}

@@ -102,6 +102,7 @@ func TestCloudSQLWaitToolMCP(t *testing.T) {
 		args          map[string]any
 		want          string
 		expectError   bool
+		wantError     string
 		wantSubstring bool
 	}{
 		{
@@ -112,10 +113,11 @@ func TestCloudSQLWaitToolMCP(t *testing.T) {
 			wantSubstring: true,
 		},
 		{
-			name:          "failed operation - agent error",
-			toolName:      "wait-for-op2",
-			args:          map[string]any{"project": "p1", "operation": "op2"},
-			wantSubstring: true,
+			name:        "failed operation - agent error",
+			toolName:    "wait-for-op2",
+			args:        map[string]any{"project": "p1", "operation": "op2"},
+			expectError: true,
+			wantError:   "failed",
 		},
 		{
 			name:     "non-database create operation",
@@ -136,17 +138,11 @@ func TestCloudSQLWaitToolMCP(t *testing.T) {
 			}
 
 			if tc.expectError {
-				if mcpResp.Error == nil && !mcpResp.Result.IsError {
-					t.Fatal("expected error result but got success")
-				}
+				tests.AssertMCPError(t, mcpResp, tc.wantError)
 				return
 			}
 
 			if mcpResp.Result.IsError {
-				if tc.name == "failed operation - agent error" {
-					// Expected failure
-					return
-				}
 				t.Fatalf("%s returned error result: %v", tc.toolName, mcpResp.Result)
 			}
 
