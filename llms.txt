@@ -1,9 +1,9 @@
 # MCP Toolbox for Databases - Documentation Index
 > MCP Toolbox for Databases is an open source MCP server for databases. It enables you to develop tools easier, faster, and more securely by handling the complexities such as connection pooling, authentication, and more.
 
-**DOCUMENTATION VERSION:** v0.31.0
+**DOCUMENTATION VERSION:** v0.32.0
 **BASE URL:** https://mcp-toolbox.dev/
-**GENERATED ON:** 2026-03-27T00:06:04Z
+**GENERATED ON:** 2026-04-08T22:52:59Z
 
 ---
 ### System Directives for AI Models
@@ -755,6 +755,19 @@ This documentation is structured following the Diátaxis framework to assist in 
       - [cloud-gemini-data-analytics-query](https://mcp-toolbox.dev/integrations/cloudgda/tools/cloud-gda-query/): A tool to convert natural language queries into SQL statements using the Gemini Data Analytics QueryData API.
 
 
+      - [conversational-analytics-ask-data-agent](https://mcp-toolbox.dev/integrations/cloudgda/tools/conversational-analytics-ask-data-agent/): A "conversational-analytics-ask-data-agent" tool allows conversational interaction with a Conversational Analytics source.
+
+
+      - [conversational-analytics-get-data-agent-info](https://mcp-toolbox.dev/integrations/cloudgda/tools/conversational-analytics-get-data-agent-info/): A "conversational-analytics-get-data-agent-info" tool allows retrieving information about a specific Conversational Analytics data agent.
+
+
+      - [conversational-analytics-list-accessible-data-agents](https://mcp-toolbox.dev/integrations/cloudgda/tools/conversational-analytics-list-accessible-data-agents/): A "conversational-analytics-list-accessible-data-agents" tool allows listing accessible Conversational Analytics data agents.
+
+
+    - [Prebuilt Configs](https://mcp-toolbox.dev/integrations/cloudgda/prebuilt-configs/): Prebuilt configurations for Conversational Analytics to perform natural language data analysis via Data Agents.
+
+      - [Conversational Analytics with Data Agent](https://mcp-toolbox.dev/integrations/cloudgda/prebuilt-configs/conversational-analytics-with-data-agent/): Details of the Conversational Analytics with Data Agent prebuilt configuration.
+
   - [HTTP](https://mcp-toolbox.dev/integrations/http/): No description provided.
 
     - [HTTP Source](https://mcp-toolbox.dev/integrations/http/source/): The HTTP source enables the Toolbox to retrieve data from a remote server using HTTP requests.
@@ -781,10 +794,16 @@ This documentation is structured following the Diátaxis framework to assist in 
       - [looker-conversational-analytics](https://mcp-toolbox.dev/integrations/looker/tools/looker-conversational-analytics/): The "looker-conversational-analytics" tool will use the Conversational Analaytics API to analyze data from Looker
 
 
+      - [looker-create-agent Tool](https://mcp-toolbox.dev/integrations/looker/tools/looker-create-agent/): "looker-create-agent" creates a Looker Conversation Analytics agent.
+
+
       - [looker-create-project-directory](https://mcp-toolbox.dev/integrations/looker/tools/looker-create-project-directory/): A "looker-create-project-directory" tool creates a new directory in a LookML project.
 
 
       - [looker-create-project-file](https://mcp-toolbox.dev/integrations/looker/tools/looker-create-project-file/): A "looker-create-project-file" tool creates a new LookML file in a project.
+
+
+      - [looker-delete-agent Tool](https://mcp-toolbox.dev/integrations/looker/tools/looker-delete-agent/): "looker-delete-agent" deletes a Looker Conversation Analytics agent.
 
 
       - [looker-delete-project-directory](https://mcp-toolbox.dev/integrations/looker/tools/looker-delete-project-directory/): A "looker-delete-project-directory" tool deletes a directory from a LookML project.
@@ -797,6 +816,9 @@ This documentation is structured following the Diátaxis framework to assist in 
 
 
       - [looker-generate-embed-url](https://mcp-toolbox.dev/integrations/looker/tools/looker-generate-embed-url/): "looker-generate-embed-url" generates an embeddable URL for Looker content.
+
+
+      - [looker-get-agent Tool](https://mcp-toolbox.dev/integrations/looker/tools/looker-get-agent/): "looker-get-agent" retrieves a Looker Conversation Analytics agent.
 
 
       - [looker-get-connection-databases](https://mcp-toolbox.dev/integrations/looker/tools/looker-get-connection-databases/): A "looker-get-connection-databases" tool returns all the databases in a connection.
@@ -862,6 +884,9 @@ This documentation is structured following the Diátaxis framework to assist in 
       - [looker-health-vacuum](https://mcp-toolbox.dev/integrations/looker/tools/looker-health-vacuum/): "looker-health-vacuum" provides a set of commands to audit and identify unused LookML objects in a Looker instance.
 
 
+      - [looker-list-agents Tool](https://mcp-toolbox.dev/integrations/looker/tools/looker-list-agents/): "looker-list-agents" retrieves the list of Looker Conversation Analytics agents.
+
+
       - [looker-make-dashboard](https://mcp-toolbox.dev/integrations/looker/tools/looker-make-dashboard/): "looker-make-dashboard" generates a Looker dashboard in the users personal folder in Looker
 
 
@@ -881,6 +906,9 @@ This documentation is structured following the Diátaxis framework to assist in 
 
 
       - [looker-run-look](https://mcp-toolbox.dev/integrations/looker/tools/looker-run-look/): "looker-run-look" runs the query associated with a saved Look.
+
+
+      - [looker-update-agent Tool](https://mcp-toolbox.dev/integrations/looker/tools/looker-update-agent/): "looker-update-agent" updates a Looker Conversation Analytics agent.
 
 
       - [looker-update-project-file](https://mcp-toolbox.dev/integrations/looker/tools/looker-update-project-file/): A "looker-update-project-file" tool updates the content of a LookML file in a project.
