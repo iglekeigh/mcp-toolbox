@@ -98,7 +98,7 @@ func TestAlloyDBAINLListTools(t *testing.T) {
 		},
 	}
 
-	tests.RunMCPToolsListMethod(t, expectedTools)
+	tests.RunMCPToolsListMethod(t, ctx, expectedTools)
 }
 
 func TestAlloyDBAINLCallTool(t *testing.T) {
@@ -203,7 +203,7 @@ func TestAlloyDBAINLCallTool(t *testing.T) {
 
 	for _, tc := range invokeTcs {
 		t.Run(tc.name, func(t *testing.T) {
-			statusCode, mcpResp, err := tests.InvokeMCPTool(t, tc.toolName, tc.args, tc.requestHeader)
+			statusCode, mcpResp, err := tests.InvokeMCPTool(t, ctx, tc.toolName, tc.args, tc.requestHeader)
 			if err != nil {
 				t.Fatalf("native error executing %s: %s", tc.toolName, err)
 			}

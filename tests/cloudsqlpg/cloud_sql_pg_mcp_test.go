@@ -121,7 +121,7 @@ func TestCloudSQLPgListTools(t *testing.T) {
 	}
 
 	// We expect standard Postgres tools to be listed
-	_, tools, err := tests.GetMCPToolsList(t, nil)
+	_, tools, err := tests.GetMCPToolsList(t, ctx, nil)
 	if err != nil {
 		t.Fatalf("failed to get tools list: %v", err)
 	}
@@ -164,8 +164,8 @@ func TestCloudSQLPgCallTool(t *testing.T) {
 	tests.RunMCPPostgresListViewsTest(t, ctx, pool)
 	tests.RunMCPPostgresListSchemasTest(t, ctx, pool, CloudSQLPostgresUser, uniqueID)
 	tests.RunMCPPostgresListActiveQueriesTest(t, ctx, pool)
-	tests.RunMCPPostgresListAvailableExtensionsTest(t)
-	tests.RunMCPPostgresListInstalledExtensionsTest(t)
+	tests.RunMCPPostgresListAvailableExtensionsTest(t, ctx)
+	tests.RunMCPPostgresListInstalledExtensionsTest(t, ctx)
 	tests.RunMCPPostgresDatabaseOverviewTest(t, ctx, pool)
 	tests.RunMCPPostgresListTriggersTest(t, ctx, pool)
 	tests.RunMCPPostgresListIndexesTest(t, ctx, pool)
@@ -176,7 +176,7 @@ func TestCloudSQLPgCallTool(t *testing.T) {
 	tests.RunMCPPostgresGetColumnCardinalityTest(t, ctx, pool)
 	tests.RunMCPPostgresListTableStatsTest(t, ctx, pool)
 	tests.RunMCPPostgresListPublicationTablesTest(t, ctx, pool)
-	tests.RunMCPPostgresListTableSpacesTest(t)
+	tests.RunMCPPostgresListTableSpacesTest(t, ctx)
 	tests.RunMCPPostgresListPgSettingsTest(t, ctx, pool)
 	tests.RunMCPPostgresListDatabaseStatsTest(t, ctx, pool)
 	tests.RunMCPPostgresListRolesTest(t, ctx, pool)
@@ -190,5 +190,5 @@ func TestCloudSQLPgCallTool(t *testing.T) {
 		"list_invalid_indexes":           `{}`,
 		"get_query_plan":                 `{"query": "SELECT 1"}`,
 	}
-	tests.RunMCPStatementToolsTest(t, toolsToTest)
+	tests.RunMCPStatementToolsTest(t, ctx, toolsToTest)
 }

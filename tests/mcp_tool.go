@@ -133,7 +133,7 @@ func NewMCPRequestHeader(t *testing.T, customHeaders map[string]string) map[stri
 }
 
 // InvokeMCPTool is a transparent, native JSON-RPC execution harness for tests.
-func InvokeMCPTool(t *testing.T, toolName string, arguments map[string]any, requestHeader map[string]string, ctx ...context.Context) (int, *MCPCallToolResponse, error) {
+func InvokeMCPTool(t *testing.T, ctx context.Context, toolName string, arguments map[string]any, requestHeader map[string]string) (int, *MCPCallToolResponse, error) {
 	headers := NewMCPRequestHeader(t, requestHeader)
 
 	req := NewMCPCallToolRequest(uuid.New().String(), toolName, arguments)
@@ -141,9 +141,8 @@ func InvokeMCPTool(t *testing.T, toolName string, arguments map[string]any, requ
 	if err != nil {
 		t.Fatalf("error marshalling request body: %v", err)
 	}
-	// TODO: We are using variadic ctx here to avoid breaking existing callers.
-	// Once all tests are updated to pass context, make it a regular first argument.
-	resp, respBody := RunRequest(t, http.MethodPost, "http://127.0.0.1:5000/mcp", bytes.NewBuffer(reqBody), headers, ctx...)
+
+	resp, respBody := RunRequest(t, http.MethodPost, "http://127.0.0.1:5000/mcp", bytes.NewBuffer(reqBody), headers, ctx)
 
 	var mcpResp MCPCallToolResponse
 	if err := json.Unmarshal(respBody, &mcpResp); err != nil {
@@ -186,7 +185,7 @@ func GetMCPResultText(t *testing.T, resp *MCPCallToolResponse) []any {
 }
 
 // GetMCPToolsList is a JSON-RPC harness that fetches the tools/list registry.
-func GetMCPToolsList(t *testing.T, requestHeader map[string]string, ctx ...context.Context) (int, []any, error) {
+func GetMCPToolsList(t *testing.T, ctx context.Context, requestHeader map[string]string) (int, []any, error) {
 	headers := NewMCPRequestHeader(t, requestHeader)
 
 	req := MCPListToolsRequest{
@@ -199,7 +198,7 @@ func GetMCPToolsList(t *testing.T, requestHeader map[string]string, ctx ...conte
 		t.Fatalf("error marshalling tools/list request body: %v", err)
 	}
 
-	resp, respBody := RunRequest(t, http.MethodPost, "http://127.0.0.1:5000/mcp", bytes.NewBuffer(reqBody), headers, ctx...)
+	resp, respBody := RunRequest(t, http.MethodPost, "http://127.0.0.1:5000/mcp", bytes.NewBuffer(reqBody), headers, ctx)
 
 	var mcpResp jsonrpc.JSONRPCResponse
 	if err := json.Unmarshal(respBody, &mcpResp); err != nil {
@@ -244,9 +243,9 @@ func AssertMCPError(t *testing.T, mcpResp *MCPCallToolResponse, wantErrMsg strin
 }
 
 // RunMCPToolsListMethod calls tools/list and verifies that the returned tools match the expected list.
-func RunMCPToolsListMethod(t *testing.T, expectedOutput []MCPToolManifest) {
+func RunMCPToolsListMethod(t *testing.T, ctx context.Context, expectedOutput []MCPToolManifest) {
 	t.Helper()
-	statusCodeList, toolsList, errList := GetMCPToolsList(t, nil)
+	statusCodeList, toolsList, errList := GetMCPToolsList(t, ctx, nil)
 	if errList != nil {
 		t.Fatalf("native error executing tools/list: %s", errList)
 	}
@@ -288,9 +287,9 @@ func RunMCPToolsListMethod(t *testing.T, expectedOutput []MCPToolManifest) {
 }
 
 // RunMCPCustomToolCallMethod invokes a tool and compares the result with expected output.
-func RunMCPCustomToolCallMethod(t *testing.T, toolName string, arguments map[string]any, want string) {
+func RunMCPCustomToolCallMethod(t *testing.T, ctx context.Context, toolName string, arguments map[string]any, want string) {
 	t.Helper()
-	statusCode, mcpResp, err := InvokeMCPTool(t, toolName, arguments, nil)
+	statusCode, mcpResp, err := InvokeMCPTool(t, ctx, toolName, arguments, nil)
 	if err != nil {
 		t.Fatalf("native error executing %s: %s", toolName, err)
 	}
@@ -310,7 +309,7 @@ func RunMCPCustomToolCallMethod(t *testing.T, toolName string, arguments map[str
 }
 
 // RunMCPToolInvokeTest runs the tool invoke test cases over MCP protocol.
-func RunMCPToolInvokeTest(t *testing.T, select1Want string, options ...InvokeTestOption) {
+func RunMCPToolInvokeTest(t *testing.T, ctx context.Context, select1Want string, options ...InvokeTestOption) {
 	t.Helper()
 	// Resolve options using existing InvokeTestOption and InvokeTestConfig from option.go
 	configs := &InvokeTestConfig{
@@ -387,7 +386,7 @@ func RunMCPToolInvokeTest(t *testing.T, select1Want string, options ...InvokeTes
 			if !tc.enabled {
 				t.Skip("skipping disabled test case")
 			}
-			statusCode, mcpResp, err := InvokeMCPTool(t, tc.toolName, tc.args, tc.headers)
+			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, tc.toolName, tc.args, tc.headers)
 			if err != nil {
 				t.Fatalf("native error executing %s: %s", tc.toolName, err)
 			}
@@ -455,7 +454,7 @@ func RunMCPPostgresListViewsTest(t *testing.T, ctx context.Context, pool *pgxpoo
 	}
 	for _, tc := range invokeTcs {
 		t.Run(tc.name, func(t *testing.T) {
-			statusCode, mcpResp, err := InvokeMCPTool(t, "list_views", tc.args, nil)
+			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_views", tc.args, nil)
 			if err != nil {
 				t.Fatalf("native error executing list_views: %s", err)
 			}
@@ -599,7 +598,7 @@ func RunMCPPostgresListTablesTest(t *testing.T, ctx context.Context, pool *pgxpo
 
 	for _, tc := range invokeTcs {
 		t.Run(tc.name, func(t *testing.T) {
-			statusCode, mcpResp, err := InvokeMCPTool(t, "list_tables", tc.args, nil)
+			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_tables", tc.args, nil)
 			if err != nil {
 				t.Fatalf("native error executing list_tables: %s", err)
 			}
@@ -697,7 +696,7 @@ func RunMCPPostgresListQueryStatsTest(t *testing.T, ctx context.Context, pool *p
 
 	for _, tc := range invokeTcs {
 		t.Run(tc.name, func(t *testing.T) {
-			statusCode, mcpResp, err := InvokeMCPTool(t, "list_query_stats", tc.args, nil)
+			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_query_stats", tc.args, nil)
 			if err != nil {
 				t.Fatalf("native error executing list_query_stats: %s", err)
 			}
@@ -777,7 +776,7 @@ func RunMCPPostgresListSchemasTest(t *testing.T, ctx context.Context, pool *pgxp
 	}
 	for _, tc := range invokeTcs {
 		t.Run(tc.name, func(t *testing.T) {
-			statusCode, mcpResp, err := InvokeMCPTool(t, "list_schemas", tc.args, nil)
+			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_schemas", tc.args, nil)
 			if err != nil {
 				t.Fatalf("native error executing list_schemas: %s", err)
 			}
@@ -893,7 +892,7 @@ func RunMCPPostgresListActiveQueriesTest(t *testing.T, ctx context.Context, pool
 				time.Sleep(time.Duration(tc.waitSecsBeforeCheck) * time.Second)
 			}
 
-			statusCode, mcpResp, err := InvokeMCPTool(t, "list_active_queries", tc.args, nil)
+			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_active_queries", tc.args, nil)
 			if err != nil {
 				t.Fatalf("native error executing list_active_queries: %s", err)
 			}
@@ -948,8 +947,8 @@ func RunMCPPostgresListActiveQueriesTest(t *testing.T, ctx context.Context, pool
 }
 
 // RunMCPPostgresListAvailableExtensionsTest tests the list_available_extensions tool via MCP.
-func RunMCPPostgresListAvailableExtensionsTest(t *testing.T) {
-	statusCode, mcpResp, err := InvokeMCPTool(t, "list_available_extensions", map[string]any{}, nil)
+func RunMCPPostgresListAvailableExtensionsTest(t *testing.T, ctx context.Context) {
+	statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_available_extensions", map[string]any{}, nil)
 	if err != nil {
 		t.Fatalf("native error executing list_available_extensions: %s", err)
 	}
@@ -962,8 +961,8 @@ func RunMCPPostgresListAvailableExtensionsTest(t *testing.T) {
 }
 
 // RunMCPPostgresListInstalledExtensionsTest tests the list_installed_extensions tool via MCP.
-func RunMCPPostgresListInstalledExtensionsTest(t *testing.T) {
-	statusCode, mcpResp, err := InvokeMCPTool(t, "list_installed_extensions", map[string]any{}, nil)
+func RunMCPPostgresListInstalledExtensionsTest(t *testing.T, ctx context.Context) {
+	statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_installed_extensions", map[string]any{}, nil)
 	if err != nil {
 		t.Fatalf("native error executing list_installed_extensions: %s", err)
 	}
@@ -1089,7 +1088,7 @@ func RunMCPPostgresListTriggersTest(t *testing.T, ctx context.Context, pool *pgx
 	}
 	for _, tc := range invokeTcs {
 		t.Run(tc.name, func(t *testing.T) {
-			statusCode, mcpResp, err := InvokeMCPTool(t, "list_triggers", tc.args, nil)
+			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_triggers", tc.args, nil)
 			if err != nil {
 				t.Fatalf("native error executing list_triggers: %s", err)
 			}
@@ -1193,7 +1192,7 @@ func RunMCPPostgresListSequencesTest(t *testing.T, ctx context.Context, pool *pg
 	}
 	for _, tc := range invokeTcs {
 		t.Run(tc.name, func(t *testing.T) {
-			statusCode, mcpResp, err := InvokeMCPTool(t, "list_sequences", tc.args, nil)
+			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_sequences", tc.args, nil)
 			if err != nil {
 				t.Fatalf("native error executing list_sequences: %s", err)
 			}
@@ -1328,7 +1327,7 @@ func RunMCPPostgresListIndexesTest(t *testing.T, ctx context.Context, pool *pgxp
 	for _, tc := range invokeTcs {
 		t.Run(tc.name, func(t *testing.T) {
 
-			statusCode, mcpResp, err := InvokeMCPTool(t, "list_indexes", tc.args, nil)
+			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_indexes", tc.args, nil)
 			if err != nil {
 				t.Fatalf("native error executing list_indexes: %s", err)
 			}
@@ -1517,7 +1516,7 @@ func RunMCPPostgresListStoredProcedureTest(t *testing.T, ctx context.Context, po
 	}
 	for _, tc := range invokeTcs {
 		t.Run(tc.name, func(t *testing.T) {
-			statusCode, mcpResp, err := InvokeMCPTool(t, "list_stored_procedure", tc.args, nil)
+			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_stored_procedure", tc.args, nil)
 			if err != nil {
 				t.Fatalf("native error executing list_stored_procedure: %s", err)
 			}
@@ -1570,7 +1569,7 @@ func RunMCPPostgresListStoredProcedureTest(t *testing.T, ctx context.Context, po
 
 // RunMCPPostgresDatabaseOverviewTest tests the database_overview tool via MCP.
 func RunMCPPostgresDatabaseOverviewTest(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
-	statusCode, mcpResp, err := InvokeMCPTool(t, "database_overview", map[string]any{}, nil)
+	statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "database_overview", map[string]any{}, nil)
 	if err != nil {
 		t.Fatalf("native error executing database_overview: %s", err)
 	}
@@ -1638,7 +1637,7 @@ func RunMCPPostgresListLocksTest(t *testing.T, ctx context.Context, pool *pgxpoo
 	cleanup := CreateAndLockMCPPostgresTable(t, ctx, pool, "test_postgres_list_locks_table")
 	defer cleanup()
 
-	statusCode, mcpResp, err := InvokeMCPTool(t, "list_locks", map[string]any{}, nil)
+	statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_locks", map[string]any{}, nil)
 	if err != nil {
 		t.Fatalf("native error executing list_locks: %s", err)
 	}
@@ -1658,7 +1657,7 @@ func RunMCPPostgresListLocksTest(t *testing.T, ctx context.Context, pool *pgxpoo
 
 // RunMCPPostgresLongRunningTransactionsTest tests the long_running_transactions tool via MCP.
 func RunMCPPostgresLongRunningTransactionsTest(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
-	statusCode, mcpResp, err := InvokeMCPTool(t, "long_running_transactions", map[string]any{}, nil)
+	statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "long_running_transactions", map[string]any{}, nil)
 	if err != nil {
 		t.Fatalf("native error executing long_running_transactions: %s", err)
 	}
@@ -1672,7 +1671,7 @@ func RunMCPPostgresLongRunningTransactionsTest(t *testing.T, ctx context.Context
 
 // RunMCPPostgresReplicationStatsTest tests the replication_stats tool via MCP.
 func RunMCPPostgresReplicationStatsTest(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
-	statusCode, mcpResp, err := InvokeMCPTool(t, "replication_stats", map[string]any{}, nil)
+	statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "replication_stats", map[string]any{}, nil)
 	if err != nil {
 		t.Fatalf("native error executing replication_stats: %s", err)
 	}
@@ -1757,7 +1756,7 @@ func RunMCPPostgresGetColumnCardinalityTest(t *testing.T, ctx context.Context, p
 	}
 	for _, tc := range invokeTcs {
 		t.Run(tc.name, func(t *testing.T) {
-			statusCode, mcpResp, err := InvokeMCPTool(t, "get_column_cardinality", tc.args, nil)
+			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "get_column_cardinality", tc.args, nil)
 			if err != nil {
 				t.Fatalf("native error executing get_column_cardinality: %s", err)
 			}
@@ -1915,7 +1914,7 @@ func RunMCPPostgresListTableStatsTest(t *testing.T, ctx context.Context, pool *p
 
 	for _, tc := range invokeTcs {
 		t.Run(tc.name, func(t *testing.T) {
-			statusCode, mcpResp, err := InvokeMCPTool(t, "list_table_stats", tc.arguments, nil)
+			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_table_stats", tc.arguments, nil)
 			if err != nil {
 				t.Fatalf("native error executing list_table_stats: %s", err)
 			}
@@ -2024,7 +2023,7 @@ func RunMCPPostgresListPublicationTablesTest(t *testing.T, ctx context.Context, 
 		t.Fatalf("unable to fetch current user: %v", err)
 	}
 
-	statusCode, mcpResp, err := InvokeMCPTool(t, "list_publication_tables", map[string]any{}, nil)
+	statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_publication_tables", map[string]any{}, nil)
 	if err != nil {
 		t.Fatalf("native error executing list_publication_tables: %s", err)
 	}
@@ -2054,8 +2053,8 @@ func RunMCPPostgresListPublicationTablesTest(t *testing.T, ctx context.Context, 
 }
 
 // RunMCPPostgresListTableSpacesTest tests the list_tablespaces tool via MCP.
-func RunMCPPostgresListTableSpacesTest(t *testing.T) {
-	statusCode, mcpResp, err := InvokeMCPTool(t, "list_tablespaces", map[string]any{}, nil)
+func RunMCPPostgresListTableSpacesTest(t *testing.T, ctx context.Context) {
+	statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_tablespaces", map[string]any{}, nil)
 	if err != nil {
 		t.Fatalf("native error executing list_tablespaces: %s", err)
 	}
@@ -2099,7 +2098,7 @@ func RunMCPPostgresListPgSettingsTest(t *testing.T, ctx context.Context, pool *p
 		"requires_restart": requiresRestart,
 	}
 
-	statusCode, mcpResp, err := InvokeMCPTool(t, "list_pg_settings", map[string]any{"setting_name": targetSetting}, nil)
+	statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_pg_settings", map[string]any{"setting_name": targetSetting}, nil)
 	if err != nil {
 		t.Fatalf("native error executing list_pg_settings: %s", err)
 	}
@@ -2155,7 +2154,7 @@ func RunMCPPostgresListDatabaseStatsTest(t *testing.T, ctx context.Context, pool
 	cleanup1 := setUpMCPDatabase(t, ctx, pool, dbName1, dbOwner1)
 	defer cleanup1()
 
-	statusCode, mcpResp, err := InvokeMCPTool(t, "list_database_stats", map[string]any{"database_name": dbName1}, nil)
+	statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_database_stats", map[string]any{"database_name": dbName1}, nil)
 	if err != nil {
 		t.Fatalf("native error executing list_database_stats: %s", err)
 	}
@@ -2229,7 +2228,7 @@ func RunMCPPostgresListRolesTest(t *testing.T, ctx context.Context, pool *pgxpoo
 	adminUser, _, _, cleanup := setupMCPPostgresRoles(t, ctx, pool)
 	defer cleanup(t)
 
-	statusCode, mcpResp, err := InvokeMCPTool(t, "list_roles", map[string]any{"role_name": "test_role_"}, nil)
+	statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_roles", map[string]any{"role_name": "test_role_"}, nil)
 	if err != nil {
 		t.Fatalf("native error executing list_roles: %s", err)
 	}
@@ -2268,7 +2267,7 @@ func RunMCPStatementToolsTest(t *testing.T, ctx context.Context, tools map[strin
 					t.Fatalf("failed to unmarshal paramBody: %v", err)
 				}
 			}
-			statusCode, mcpResp, err := InvokeMCPTool(t, toolName, args, nil, ctx)
+			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, toolName, args, nil)
 			if err != nil {
 				t.Fatalf("native error executing %s: %s", toolName, err)
 			}

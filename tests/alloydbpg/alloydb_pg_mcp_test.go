@@ -138,7 +138,7 @@ func TestAlloyDBPgListTools(t *testing.T) {
 
 	// We expect standard Postgres tools to be listed
 	// This is a subset check, full list validation can be added if needed
-	_, tools, err := tests.GetMCPToolsList(t, nil, ctx)
+	_, tools, err := tests.GetMCPToolsList(t, ctx, nil)
 	if err != nil {
 		t.Fatalf("failed to get tools list: %v", err)
 	}
@@ -184,8 +184,8 @@ func TestAlloyDBPgCallTool(t *testing.T) {
 	tests.RunMCPPostgresListActiveQueriesTest(t, ctx, pool)
 	tests.RunMCPPostgresListTablesTest(t, ctx, pool, AlloyDBPostgresUser)
 	tests.RunMCPPostgresListQueryStatsTest(t, ctx, pool)
-	tests.RunMCPPostgresListAvailableExtensionsTest(t)
-	tests.RunMCPPostgresListInstalledExtensionsTest(t)
+	tests.RunMCPPostgresListAvailableExtensionsTest(t, ctx)
+	tests.RunMCPPostgresListInstalledExtensionsTest(t, ctx)
 	tests.RunMCPPostgresDatabaseOverviewTest(t, ctx, pool)
 	tests.RunMCPPostgresListTriggersTest(t, ctx, pool)
 	tests.RunMCPPostgresListIndexesTest(t, ctx, pool)
@@ -196,7 +196,7 @@ func TestAlloyDBPgCallTool(t *testing.T) {
 	tests.RunMCPPostgresGetColumnCardinalityTest(t, ctx, pool)
 	tests.RunMCPPostgresListTableStatsTest(t, ctx, pool)
 	tests.RunMCPPostgresListPublicationTablesTest(t, ctx, pool)
-	tests.RunMCPPostgresListTableSpacesTest(t)
+	tests.RunMCPPostgresListTableSpacesTest(t, ctx)
 	tests.RunMCPPostgresListPgSettingsTest(t, ctx, pool)
 	tests.RunMCPPostgresListDatabaseStatsTest(t, ctx, pool)
 	tests.RunMCPPostgresListRolesTest(t, ctx, pool)
