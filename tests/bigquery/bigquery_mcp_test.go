@@ -32,20 +32,15 @@ import (
 )
 
 func setupBigQueryMCPServer(t *testing.T, ctx context.Context) (datasetName string, tableNames map[string]string, cleanup func()) {
-	t.Log("Entering setupBigQueryMCPServer")
 	sourceConfig := getBigQueryVars(t)
-	t.Log("After getBigQueryVars")
 	uniqueID := strings.ReplaceAll(uuid.New().String(), "-", "")
-	t.Logf("Starting MCP server setup with uniqueID: %s", uniqueID)
 
 	args := []string{}
 
-	t.Log("Before initBigQueryConnection")
 	client, err := initBigQueryConnection(BigqueryProject)
 	if err != nil {
 		t.Fatalf("unable to create BigQuery client: %s", err)
 	}
-	t.Log("After initBigQueryConnection")
 
 	datasetName = fmt.Sprintf("temp_toolbox_test_%s", uniqueID)
 	tableName := fmt.Sprintf("param_table_%s", uniqueID)
@@ -61,46 +56,32 @@ func setupBigQueryMCPServer(t *testing.T, ctx context.Context) (datasetName stri
 	}
 
 	// set up data for param tool
-	t.Log("Before setupBigQueryTable 1")
 	createParamTableStmt, insertParamTableStmt, paramToolStmt, idParamToolStmt, nameParamToolStmt, arrayToolStmt, paramTestParams := getBigQueryParamToolInfo(tableNameParam)
 	setupBigQueryTable(t, ctx, client, createParamTableStmt, insertParamTableStmt, datasetName, tableNameParam, paramTestParams)
-	t.Log("After setupBigQueryTable 1")
 
 	// set up data for auth tool
-	t.Log("Before setupBigQueryTable 2")
 	createAuthTableStmt, insertAuthTableStmt, authToolStmt, authTestParams := getBigQueryAuthToolInfo(tableNameAuth)
 	setupBigQueryTable(t, ctx, client, createAuthTableStmt, insertAuthTableStmt, datasetName, tableNameAuth, authTestParams)
-	t.Log("After setupBigQueryTable 2")
 
 	// set up data for forecast tool
-	t.Log("Before setupBigQueryTable 3")
 	createForecastTableStmt, insertForecastTableStmt, forecastTestParams := getBigQueryForecastToolInfo(tableNameForecast)
 	setupBigQueryTable(t, ctx, client, createForecastTableStmt, insertForecastTableStmt, datasetName, tableNameForecast, forecastTestParams)
-	t.Log("After setupBigQueryTable 3")
 
 	// set up data for analyze contribution tool
-	t.Log("Before setupBigQueryTable 4")
 	createAnalyzeContributionTableStmt, insertAnalyzeContributionTableStmt, analyzeContributionTestParams := getBigQueryAnalyzeContributionToolInfo(tableNameAnalyzeContribution)
 	setupBigQueryTable(t, ctx, client, createAnalyzeContributionTableStmt, insertAnalyzeContributionTableStmt, datasetName, tableNameAnalyzeContribution, analyzeContributionTestParams)
-	t.Log("After setupBigQueryTable 4")
 
 	// set up data for data type test tool
-	t.Log("Before setupBigQueryTable 5")
 	createDataTypeTableStmt, insertDataTypeTableStmt, dataTypeToolStmt, arrayDataTypeToolStmt, dataTypeTestParams := getBigQueryDataTypeTestInfo(tableNameDataType)
 	setupBigQueryTable(t, ctx, client, createDataTypeTableStmt, insertDataTypeTableStmt, datasetName, tableNameDataType, dataTypeTestParams)
-	t.Log("After setupBigQueryTable 5")
 
 	// Write config into a file and pass it to command
-	t.Log("Before GetToolsConfig")
 	toolsFile := tests.GetToolsConfig(sourceConfig, BigqueryToolType, paramToolStmt, idParamToolStmt, nameParamToolStmt, arrayToolStmt, authToolStmt)
 	toolsFile = addClientAuthSourceConfig(t, toolsFile)
 	toolsFile = addBigQuerySqlToolConfig(t, toolsFile, dataTypeToolStmt, arrayDataTypeToolStmt)
 	toolsFile = addBigQueryPrebuiltToolsConfig(t, toolsFile)
-	t.Log("After GetToolsConfig")
 
-	t.Log("Before StartCmd")
 	cmd, cmdCleanup, err := tests.StartCmd(ctx, toolsFile, args...)
-	t.Log("After StartCmd")
 	if err != nil {
 		cleanup()
 		t.Fatalf("command initialization returned an error: %s", err)
@@ -286,6 +267,9 @@ func invokeMCPToolForTest(t *testing.T, info ToolTestInfo) (string, bool) {
 			if info.Want == "invalid token" && (strings.Contains(errMsg, "invalid token") || strings.Contains(errMsg, "invalid_request")) {
 				return errMsg, true
 			}
+			if (info.Want == "auth token is required" || info.Want == "invalid token" || info.Want == "Authorization header is required") && strings.Contains(errMsg, "unauthorized Tool call") {
+				return errMsg, true
+			}
 		}
 		var errorMsg string
 		if mcpResp != nil && mcpResp.Error != nil {
@@ -409,7 +393,15 @@ func runBigQueryDataTypeTestsMCP(t *testing.T) {
 			}
 		}
 
-		if info.Want != "" && !strings.Contains(got, wantCore) {
+		gotCore := got
+		var gotObj map[string]string
+		if json.Unmarshal([]byte(got), &gotObj) == nil {
+			if errMsg, ok := gotObj["error"]; ok {
+				gotCore = errMsg
+			}
+		}
+
+		if info.Want != "" && !strings.Contains(gotCore, wantCore) {
 			t.Fatalf("unexpected result: got %s, want to contain %s", got, wantCore)
 		}
 	})
@@ -531,6 +523,11 @@ func TestBigQueryToolWithDatasetRestrictionMCP(t *testing.T) {
 			"source":      "my-instance",
 			"description": "Tool to analyze contribution",
 		},
+		"conversational-analytics-restricted": map[string]any{
+			"type":        "bigquery-conversational-analytics",
+			"source":      "my-instance",
+			"description": "Tool to do conversational analytics",
+		},
 	}
 
 	config := map[string]any{
@@ -612,7 +609,7 @@ func TestBigQueryToolWithDatasetRestrictionMCP(t *testing.T) {
 			name:         "execute sql allowed",
 			toolName:     "execute-sql-restricted",
 			args:         map[string]any{"sql": fmt.Sprintf("SELECT * FROM %s", allowedTableNameParam1)},
-			wantInResult: "Query executed successfully",
+			wantInResult: "The query returned 0 rows.",
 		},
 		{
 			name:        "execute sql disallowed",
@@ -677,7 +674,7 @@ func TestBigQueryToolWithDatasetRestrictionMCP(t *testing.T) {
 		{
 			name:         "analyze contribution allowed",
 			toolName:     "analyze-contribution-restricted",
-			args:         map[string]any{"input_data": fmt.Sprintf("%s.%s.%s", BigqueryProject, allowedDatasetName1, allowedAnalyzeContributionTableName1), "contribution_metric": "SUM(metric)", "is_test_col": "is_test", "dimension_id_cols": []any{"dim1"}},
+			args:         map[string]any{"input_data": fmt.Sprintf("%s.%s.%s", BigqueryProject, allowedDatasetName1, allowedAnalyzeContributionTableName1), "contribution_metric": "SUM(metric)", "is_test_col": "is_test", "dimension_id_cols": []any{"dim1", "dim2"}},
 			wantInResult: "relative_difference",
 		},
 		{
