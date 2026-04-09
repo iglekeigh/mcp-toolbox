@@ -38,7 +38,7 @@ type ToolTestInfo struct {
 type TestRunner func(t *testing.T, info ToolTestInfo)
 
 func runBigQueryExecuteSqlToolInvokeTestCommon(t *testing.T, select1Want, invokeParamWant, tableNameParam, ddlWant string, runner TestRunner) {
-	idToken, err := tests.GetGoogleIdToken(tests.ClientId)
+	idToken, err := tests.GetGoogleIdToken(t)
 	if err != nil {
 		t.Fatalf("error getting Google ID token: %s", err)
 	}
@@ -140,7 +140,7 @@ func runBigQueryExecuteSqlToolInvokeTestCommon(t *testing.T, select1Want, invoke
 }
 
 func runBigQueryForecastToolInvokeTestCommon(t *testing.T, tableName string, runner TestRunner) {
-	idToken, err := tests.GetGoogleIdToken(tests.ClientId)
+	idToken, err := tests.GetGoogleIdToken(t)
 	if err != nil {
 		t.Fatalf("error getting Google ID token: %s", err)
 	}
@@ -233,7 +233,7 @@ func runBigQueryForecastToolInvokeTestCommon(t *testing.T, tableName string, run
 }
 
 func runBigQueryAnalyzeContributionToolInvokeTestCommon(t *testing.T, tableName string, runner TestRunner) {
-	idToken, err := tests.GetGoogleIdToken(tests.ClientId)
+	idToken, err := tests.GetGoogleIdToken(t)
 	if err != nil {
 		t.Fatalf("error getting Google ID token: %s", err)
 	}
@@ -309,7 +309,7 @@ func runBigQueryAnalyzeContributionToolInvokeTestCommon(t *testing.T, tableName 
 }
 
 func runBigQueryListDatasetToolInvokeTestCommon(t *testing.T, datasetWant string, runner TestRunner) {
-	idToken, err := tests.GetGoogleIdToken(tests.ClientId)
+	idToken, err := tests.GetGoogleIdToken(t)
 	if err != nil {
 		t.Fatalf("error getting Google ID token: %s", err)
 	}
@@ -384,7 +384,7 @@ func runBigQueryListDatasetToolInvokeTestCommon(t *testing.T, datasetWant string
 }
 
 func runBigQueryGetDatasetInfoToolInvokeTestCommon(t *testing.T, datasetName, datasetInfoWant string, runner TestRunner) {
-	idToken, err := tests.GetGoogleIdToken(tests.ClientId)
+	idToken, err := tests.GetGoogleIdToken(t)
 	if err != nil {
 		t.Fatalf("error getting Google ID token: %s", err)
 	}
@@ -487,7 +487,7 @@ func runBigQueryGetDatasetInfoToolInvokeTestCommon(t *testing.T, datasetName, da
 }
 
 func runBigQueryListTableIdsToolInvokeTestCommon(t *testing.T, datasetName, tablename_want string, runner TestRunner) {
-	idToken, err := tests.GetGoogleIdToken(tests.ClientId)
+	idToken, err := tests.GetGoogleIdToken(t)
 	if err != nil {
 		t.Fatalf("error getting Google ID token: %s", err)
 	}
@@ -583,7 +583,7 @@ func runBigQueryListTableIdsToolInvokeTestCommon(t *testing.T, datasetName, tabl
 }
 
 func runBigQueryGetTableInfoToolInvokeTestCommon(t *testing.T, datasetName, tableName, tableInfoWant string, runner TestRunner) {
-	idToken, err := tests.GetGoogleIdToken(tests.ClientId)
+	idToken, err := tests.GetGoogleIdToken(t)
 	if err != nil {
 		t.Fatalf("error getting Google ID token: %s", err)
 	}
@@ -686,7 +686,7 @@ func runBigQueryGetTableInfoToolInvokeTestCommon(t *testing.T, datasetName, tabl
 }
 
 func runBigQueryConversationalAnalyticsInvokeTestCommon(t *testing.T, datasetName, tableName, dataInsightsWant string, runner TestRunner) {
-	idToken, err := tests.GetGoogleIdToken(tests.ClientId)
+	idToken, err := tests.GetGoogleIdToken(t)
 	if err != nil {
 		t.Fatalf("error getting Google ID token: %s", err)
 	}
@@ -770,7 +770,7 @@ func runBigQueryConversationalAnalyticsInvokeTestCommon(t *testing.T, datasetNam
 }
 
 func runBigQuerySearchCatalogToolInvokeTestCommon(t *testing.T, datasetName string, tableName string, runner TestRunner) {
-	idToken, err := tests.GetGoogleIdToken(tests.ClientId)
+	idToken, err := tests.GetGoogleIdToken(t)
 	if err != nil {
 		t.Fatalf("error getting Google ID token: %s", err)
 	}
@@ -894,7 +894,7 @@ func runBigQueryDataTypeTestsCommon(t *testing.T, runner TestRunner) {
 }
 
 func runBigQueryExecuteSqlToolInvokeDryRunTestCommon(t *testing.T, datasetName string, runner TestRunner) {
-	idToken, err := tests.GetGoogleIdToken(tests.ClientId)
+	idToken, err := tests.GetGoogleIdToken(t)
 	if err != nil {
 		t.Fatalf("error getting Google ID token: %s", err)
 	}
