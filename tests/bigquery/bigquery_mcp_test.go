@@ -56,7 +56,7 @@ func setupBigQueryMCPServer(t *testing.T, ctx context.Context) (datasetName stri
 	tableNameDataType := fmt.Sprintf("`%s.%s.datatype_test_%s`", BigqueryProject, datasetName, uniqueID)
 
 	// global cleanup for this test run
-	cleanup = func() {
+	dbCleanup := func() {
 		tests.CleanupBigQueryDatasets(t, context.Background(), client, []string{datasetName})
 	}
 
@@ -132,7 +132,7 @@ func setupBigQueryMCPServer(t *testing.T, ctx context.Context) (datasetName stri
 
 	return datasetName, tableNames, func() {
 		cmdCleanup()
-		cleanup()
+		dbCleanup()
 	}
 }
 
