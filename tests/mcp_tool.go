@@ -169,6 +169,9 @@ func getMCPResultText(t *testing.T, resp *MCPCallToolResponse) []any {
 		}
 
 	}
+	if res == nil {
+		return []any{}
+	}
 	return res
 }
 
@@ -798,7 +801,7 @@ func RunMCPPostgresListSchemasTest(t *testing.T, ctx context.Context, pool *pgxp
 					t.Errorf("Expected schema '%+v' not found in the list of all schemas.", wantSchema)
 				}
 			} else {
-				var wantObj []any
+				wantObj := []any{}
 				for _, item := range tc.want {
 					wantObj = append(wantObj, item)
 				}
@@ -1110,7 +1113,7 @@ func RunMCPPostgresListTriggersTest(t *testing.T, ctx context.Context, pool *pgx
 					t.Errorf("Expected trigger '%+v' not found in the list. Got: %+v", wantTrigger, gotObj)
 				}
 			} else {
-				var wantObj []any
+				wantObj := []any{}
 				for _, item := range tc.want {
 					wantObj = append(wantObj, item)
 				}
@@ -1192,7 +1195,7 @@ func RunMCPPostgresListSequencesTest(t *testing.T, ctx context.Context, pool *pg
 				t.Fatalf("list_sequences returned error result: %v", mcpResp.Result)
 			}
 			gotObj := getMCPResultText(t, mcpResp)
-			var wantObj []any
+			wantObj := []any{}
 			for _, item := range tc.want {
 				wantObj = append(wantObj, item)
 			}
@@ -1351,7 +1354,7 @@ func RunMCPPostgresListIndexesTest(t *testing.T, ctx context.Context, pool *pgxp
 					}
 				}
 			} else {
-				var wantObj []any
+				wantObj := []any{}
 				for _, item := range tc.want {
 					wantObj = append(wantObj, item)
 				}
