@@ -1151,3 +1151,19 @@ func InitPostgresConnectionPool(host, port, user, pass, dbname string) (*pgxpool
 
 	return pool, nil
 }
+
+// createPostgresExtension creates a test extension and returns a cleanup function.
+func createPostgresExtension(t *testing.T, ctx context.Context, pool *pgxpool.Pool, extensionName string) func() {
+	createExtensionCmd := fmt.Sprintf("CREATE EXTENSION IF NOT EXISTS %s", extensionName)
+	_, err := pool.Exec(ctx, createExtensionCmd)
+	if err != nil {
+		t.Fatalf("failed to create extension: %v", err)
+	}
+	return func() {
+		dropExtensionCmd := fmt.Sprintf("DROP EXTENSION IF EXISTS %s", extensionName)
+		_, err := pool.Exec(ctx, dropExtensionCmd)
+		if err != nil {
+			t.Fatalf("failed to drop extension: %v", err)
+		}
+	}
+}

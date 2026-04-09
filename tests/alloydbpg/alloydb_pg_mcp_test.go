@@ -178,6 +178,8 @@ func TestAlloyDBPgCallTool(t *testing.T) {
 	tests.RunMCPPostgresListViewsTest(t, ctx, pool)
 	tests.RunMCPPostgresListSchemasTest(t, ctx, pool, AlloyDBPostgresUser, uniqueID)
 	tests.RunMCPPostgresListActiveQueriesTest(t, ctx, pool)
+	tests.RunMCPPostgresListTablesTest(t, ctx, pool, AlloyDBPostgresUser)
+	tests.RunMCPPostgresListQueryStatsTest(t, ctx, pool)
 	tests.RunMCPPostgresListAvailableExtensionsTest(t)
 	tests.RunMCPPostgresListInstalledExtensionsTest(t)
 	tests.RunMCPPostgresDatabaseOverviewTest(t, ctx, pool)

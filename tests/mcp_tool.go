@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -466,6 +467,246 @@ func RunMCPPostgresListViewsTest(t *testing.T, ctx context.Context, pool *pgxpoo
 				t.Errorf("Unexpected result mismatch (-want +got):\n%s", diff)
 			}
 
+		})
+	}
+}
+
+// RunMCPPostgresListTablesTest tests the list_tables tool via MCP.
+func RunMCPPostgresListTablesTest(t *testing.T, ctx context.Context, pool *pgxpool.Pool, user string) {
+	uniqueID := strings.ReplaceAll(uuid.New().String(), "-", "")
+	tableNameParam := "param_table_" + uniqueID
+	tableNameAuth := "auth_table_" + uniqueID
+
+	createParamTableStmt, insertParamTableStmt, _, _, _, _, paramTestParams := GetPostgresSQLParamToolInfo(tableNameParam)
+	teardownTable1 := SetupPostgresSQLTable(t, ctx, pool, createParamTableStmt, insertParamTableStmt, tableNameParam, paramTestParams)
+	defer teardownTable1(t)
+
+	createAuthTableStmt, insertAuthTableStmt, _, authTestParams := GetPostgresSQLAuthToolInfo(tableNameAuth)
+	teardownTable2 := SetupPostgresSQLTable(t, ctx, pool, createAuthTableStmt, insertAuthTableStmt, tableNameAuth, authTestParams)
+	defer teardownTable2(t)
+
+	// TableNameParam columns to construct want
+	paramTableColumns := fmt.Sprintf(`[
+		{"data_type": "integer", "column_name": "id", "column_default": "nextval('%s_id_seq'::regclass)", "is_not_nullable": true, "ordinal_position": 1, "column_comment": null},
+		{"data_type": "text", "column_name": "name", "column_default": null, "is_not_nullable": false, "ordinal_position": 2, "column_comment": null}
+	]`, tableNameParam)
+
+	// TableNameAuth columns to construct want
+	authTableColumns := fmt.Sprintf(`[
+		{"data_type": "integer", "column_name": "id", "column_default": "nextval('%s_id_seq'::regclass)", "is_not_nullable": true, "ordinal_position": 1, "column_comment": null},
+		{"data_type": "text", "column_name": "name", "column_default": null, "is_not_nullable": false, "ordinal_position": 2, "column_comment": null},
+		{"data_type": "text", "column_name": "email", "column_default": null, "is_not_nullable": false, "ordinal_position": 3, "column_comment": null}
+	]`, tableNameAuth)
+
+	const (
+		// Template to construct detailed output want
+		detailedObjectTemplate = `{
+            "object_name": "%[1]s", "schema_name": "public",
+            "object_details": {
+                "owner": "%[3]s", "comment": null,
+                "indexes": [{"is_primary": true, "is_unique": true, "index_name": "%[1]s_pkey", "index_method": "btree", "index_columns": ["id"], "index_definition": "CREATE UNIQUE INDEX %[1]s_pkey ON public.%[1]s USING btree (id)"}],
+                "triggers": [], "columns": %[2]s, "object_name": "%[1]s", "object_type": "TABLE", "schema_name": "public",
+                "constraints": [{"constraint_name": "%[1]s_pkey", "constraint_type": "PRIMARY KEY", "constraint_columns": ["id"], "constraint_definition": "PRIMARY KEY (id)", "foreign_key_referenced_table": null, "foreign_key_referenced_columns": null}]
+            }
+        }`
+
+		// Template to construct simple output want
+		simpleObjectTemplate = `{"object_name":"%s", "schema_name":"public", "object_details":{"name":"%s"}}`
+	)
+
+	// Helper to build json for detailed want
+	getDetailedWant := func(tableName, columnJSON string) string {
+		return fmt.Sprintf(detailedObjectTemplate, tableName, columnJSON, user)
+	}
+
+	// Helper to build template for simple want
+	getSimpleWant := func(tableName string) string {
+		return fmt.Sprintf(simpleObjectTemplate, tableName, tableName)
+	}
+
+	invokeTcs := []struct {
+		name           string
+		args           map[string]any
+		wantStatusCode int
+		want           string
+		isAllTables    bool
+		isAgentErr     bool
+	}{
+		{
+			name:           "invoke list_tables all tables detailed output",
+			args:           map[string]any{"table_names": ""},
+			wantStatusCode: http.StatusOK,
+			want:           fmt.Sprintf("[%s,%s]", getDetailedWant(tableNameAuth, authTableColumns), getDetailedWant(tableNameParam, paramTableColumns)),
+			isAllTables:    true,
+		},
+		{
+			name:           "invoke list_tables all tables simple output",
+			args:           map[string]any{"table_names": "", "output_format": "simple"},
+			wantStatusCode: http.StatusOK,
+			want:           fmt.Sprintf("[%s,%s]", getSimpleWant(tableNameAuth), getSimpleWant(tableNameParam)),
+			isAllTables:    true,
+		},
+		{
+			name:           "invoke list_tables detailed output",
+			args:           map[string]any{"table_names": tableNameAuth},
+			wantStatusCode: http.StatusOK,
+			want:           fmt.Sprintf("[%s]", getDetailedWant(tableNameAuth, authTableColumns)),
+		},
+		{
+			name:           "invoke list_tables simple output",
+			args:           map[string]any{"table_names": tableNameAuth, "output_format": "simple"},
+			wantStatusCode: http.StatusOK,
+			want:           fmt.Sprintf("[%s]", getSimpleWant(tableNameAuth)),
+		},
+		{
+			name:           "invoke list_tables with invalid output format",
+			args:           map[string]any{"table_names": "", "output_format": "abcd"},
+			wantStatusCode: http.StatusOK,
+			isAgentErr:     true,
+		},
+		{
+			name:           "invoke list_tables with malformed table_names parameter",
+			args:           map[string]any{"table_names": 12345, "output_format": "detailed"},
+			wantStatusCode: http.StatusOK,
+			isAgentErr:     true,
+		},
+		{
+			name:           "invoke list_tables with multiple table names",
+			args:           map[string]any{"table_names": fmt.Sprintf("%s,%s", tableNameParam, tableNameAuth)},
+			wantStatusCode: http.StatusOK,
+			want:           fmt.Sprintf("[%s,%s]", getDetailedWant(tableNameAuth, authTableColumns), getDetailedWant(tableNameParam, paramTableColumns)),
+		},
+		{
+			name:           "invoke list_tables with non-existent table",
+			args:           map[string]any{"table_names": "non_existent_table"},
+			wantStatusCode: http.StatusOK,
+			want:           `[]`,
+		},
+	}
+
+	for _, tc := range invokeTcs {
+		t.Run(tc.name, func(t *testing.T) {
+			statusCode, mcpResp, err := InvokeMCPTool(t, "list_tables", tc.args, nil)
+			if err != nil {
+				t.Fatalf("native error executing list_tables: %s", err)
+			}
+			if statusCode != tc.wantStatusCode {
+				t.Fatalf("wrong status code: got %d, want %d", statusCode, tc.wantStatusCode)
+			}
+			if tc.wantStatusCode != http.StatusOK {
+				return
+			}
+
+			if tc.isAgentErr {
+				if mcpResp.Error == nil && !mcpResp.Result.IsError {
+					t.Fatalf("expected error result or JSON-RPC error, got success")
+				}
+				return
+			}
+
+			if mcpResp.Result.IsError {
+				t.Fatalf("list_tables returned error result: %v", mcpResp.Result)
+			}
+
+			got := getMCPResultText(t, mcpResp)
+
+			var wantObj []any
+			if err := json.Unmarshal([]byte(tc.want), &wantObj); err != nil {
+				t.Fatalf("failed to unmarshal want string: %v", err)
+			}
+
+			if tc.isAllTables {
+				var filteredGot []any
+				for _, item := range got {
+					if tableMap, ok := item.(map[string]any); ok {
+						name, _ := tableMap["object_name"].(string)
+						if name == tableNameParam || name == tableNameAuth {
+							filteredGot = append(filteredGot, item)
+						}
+					}
+				}
+				got = filteredGot
+			}
+
+			// Sort both to ensure comparison works regardless of order
+			sort.SliceStable(got, func(i, j int) bool {
+				return fmt.Sprintf("%v", got[i]) < fmt.Sprintf("%v", got[j])
+			})
+			sort.SliceStable(wantObj, func(i, j int) bool {
+				return fmt.Sprintf("%v", wantObj[i]) < fmt.Sprintf("%v", wantObj[j])
+			})
+
+			if diff := cmp.Diff(wantObj, got); diff != "" {
+				t.Errorf("Unexpected result mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// RunMCPPostgresListQueryStatsTest tests the list_query_stats tool via MCP.
+func RunMCPPostgresListQueryStatsTest(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	// Insert a simple query by running a SELECT statement
+	// This will record statistics in pg_stat_statements
+	selectStmt := "SELECT 1 as test_query"
+	if _, err := pool.Exec(ctx, selectStmt); err != nil {
+		t.Logf("warning: unable to execute test query: %s", err)
+	}
+
+	dropExtensionFunc := createPostgresExtension(t, ctx, pool, "pg_stat_statements")
+	defer dropExtensionFunc()
+
+	invokeTcs := []struct {
+		name           string
+		args           map[string]any
+		wantStatusCode int
+	}{
+		{
+			name:           "list query stats with default limit",
+			args:           map[string]any{},
+			wantStatusCode: http.StatusOK,
+		},
+		{
+			name:           "list query stats with custom limit",
+			args:           map[string]any{"limit": 10},
+			wantStatusCode: http.StatusOK,
+		},
+		{
+			name:           "list query stats for specific database",
+			args:           map[string]any{"database_name": "postgres"},
+			wantStatusCode: http.StatusOK,
+		},
+		{
+			name:           "list query stats with non-existent database name",
+			args:           map[string]any{"database_name": "non_existent_db_xyz"},
+			wantStatusCode: http.StatusOK,
+		},
+	}
+
+	for _, tc := range invokeTcs {
+		t.Run(tc.name, func(t *testing.T) {
+			statusCode, mcpResp, err := InvokeMCPTool(t, "list_query_stats", tc.args, nil)
+			if err != nil {
+				t.Fatalf("native error executing list_query_stats: %s", err)
+			}
+			if statusCode != tc.wantStatusCode {
+				t.Fatalf("wrong status code: got %d, want %d", statusCode, tc.wantStatusCode)
+			}
+			if tc.wantStatusCode != http.StatusOK {
+				return
+			}
+
+			if mcpResp.Result.IsError {
+				t.Fatalf("list_query_stats returned error result: %v", mcpResp.Result)
+			}
+
+			got := getMCPResultText(t, mcpResp)
+
+			// Verify that we got a list (even if empty)
+			if got == nil {
+				t.Fatalf("expected a list result, got nil")
+			}
+
+			t.Logf("found %d query stats", len(got))
 		})
 	}
 }
