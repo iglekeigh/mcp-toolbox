@@ -914,8 +914,6 @@ func RunMCPPostgresListActiveQueriesTest(t *testing.T, ctx context.Context, pool
 					}
 				}
 			}
-				}
-			}
 
 			if len(tc.want) == 0 {
 				if len(details) != 0 {
@@ -1213,7 +1211,6 @@ func RunMCPPostgresListSequencesTest(t *testing.T, ctx context.Context, pool *pg
 			if diff := cmp.Diff(wantObj, gotObj); diff != "" {
 				t.Errorf("Unexpected result mismatch (-want +got):\n%s", diff)
 			}
-
 
 		})
 	}
@@ -1545,8 +1542,6 @@ func RunMCPPostgresListStoredProcedureTest(t *testing.T, ctx context.Context, po
 					}
 
 					gotObj = append(gotObj, proc)
-				}
-			}
 				}
 			}
 
