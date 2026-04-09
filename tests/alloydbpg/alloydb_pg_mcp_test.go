@@ -112,6 +112,8 @@ func initAlloyDBPgConnectionPool(ctx context.Context, project, region, cluster, 
 }
 
 func TestAlloyDBPgListTools(t *testing.T) {
+	getAlloyDBPgVars(t)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
