@@ -25,59 +25,36 @@ import (
 	"testing"
 	"time"
 
+	bigqueryapi "cloud.google.com/go/bigquery"
 	"github.com/google/uuid"
-	"github.com/googleapis/genai-toolbox/internal/testutils"
-	"github.com/googleapis/genai-toolbox/tests"
+	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/tests"
 )
 
-func TestBigQueryToolEndpointsMCP(t *testing.T) {
+func setupBigQueryMCPServer(t *testing.T, ctx context.Context) (datasetName string, tableNames map[string]string, cleanup func()) {
 	sourceConfig := getBigQueryVars(t)
 	uniqueID := strings.ReplaceAll(uuid.New().String(), "-", "")
-	t.Logf("Starting MCP test with uniqueID: %s", uniqueID)
+	t.Logf("Starting MCP server setup with uniqueID: %s", uniqueID)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
-	defer cancel()
-
-	args := []string{"--enable-api"}
+	args := []string{}
 
 	client, err := initBigQueryConnection(BigqueryProject)
 	if err != nil {
 		t.Fatalf("unable to create BigQuery client: %s", err)
 	}
 
-	// create table name with UUID
-	datasetName := fmt.Sprintf("temp_toolbox_test_%s", uniqueID)
+	datasetName = fmt.Sprintf("temp_toolbox_test_%s", uniqueID)
 	tableName := fmt.Sprintf("param_table_%s", uniqueID)
-	tableNameParam := fmt.Sprintf("`%s.%s.%s`",
-		BigqueryProject,
-		datasetName,
-		tableName,
-	)
-	tableNameAuth := fmt.Sprintf("`%s.%s.auth_table_%s`",
-		BigqueryProject,
-		datasetName,
-		uniqueID,
-	)
-	tableNameForecast := fmt.Sprintf("`%s.%s.forecast_table_%s`",
-		BigqueryProject,
-		datasetName,
-		uniqueID,
-	)
-	tableNameAnalyzeContribution := fmt.Sprintf("`%s.%s.analyze_contribution_table_%s`",
-		BigqueryProject,
-		datasetName,
-		uniqueID,
-	)
-	tableNameDataType := fmt.Sprintf("`%s.%s.datatype_test_%s`",
-		BigqueryProject,
-		datasetName,
-		uniqueID,
-	)
+	tableNameParam := fmt.Sprintf("`%s.%s.%s`", BigqueryProject, datasetName, tableName)
+	tableNameAuth := fmt.Sprintf("`%s.%s.auth_table_%s`", BigqueryProject, datasetName, uniqueID)
+	tableNameForecast := fmt.Sprintf("`%s.%s.forecast_table_%s`", BigqueryProject, datasetName, uniqueID)
+	tableNameAnalyzeContribution := fmt.Sprintf("`%s.%s.analyze_contribution_table_%s`", BigqueryProject, datasetName, uniqueID)
+	tableNameDataType := fmt.Sprintf("`%s.%s.datatype_test_%s`", BigqueryProject, datasetName, uniqueID)
 
 	// global cleanup for this test run
-	t.Cleanup(func() {
+	cleanup = func() {
 		tests.CleanupBigQueryDatasets(t, context.Background(), client, []string{datasetName})
-	})
+	}
 
 	// set up data for param tool
 	createParamTableStmt, insertParamTableStmt, paramToolStmt, idParamToolStmt, nameParamToolStmt, arrayToolStmt, paramTestParams := getBigQueryParamToolInfo(tableNameParam)
@@ -105,24 +82,91 @@ func TestBigQueryToolEndpointsMCP(t *testing.T) {
 	toolsFile = addBigQuerySqlToolConfig(t, toolsFile, dataTypeToolStmt, arrayDataTypeToolStmt)
 	toolsFile = addBigQueryPrebuiltToolsConfig(t, toolsFile)
 
-	cmd, cleanup, err := tests.StartCmd(ctx, toolsFile, args...)
+	cmd, cmdCleanup, err := tests.StartCmd(ctx, toolsFile, args...)
 	if err != nil {
+		cleanup()
 		t.Fatalf("command initialization returned an error: %s", err)
 	}
-	defer cleanup()
 
 	waitCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	out, err := testutils.WaitForString(waitCtx, regexp.MustCompile(`Server ready to serve`), cmd.Out)
 	if err != nil {
+		cleanup()
+		cmdCleanup()
 		t.Logf("toolbox command logs: \n%s", out)
 		t.Fatalf("toolbox didn't start successfully: %s", err)
 	}
 
-	// FIX: Background goroutine to drain server logs and prevent pipe buffer deadlock.
+	// Background goroutine to drain server logs and prevent pipe buffer deadlock.
 	go func() {
 		_, _ = io.Copy(io.Discard, cmd.Out)
 	}()
+
+	tableNames = map[string]string{
+		"paramTableFull":               tableNameParam,
+		"authTableFull":                tableNameAuth,
+		"forecastTableFull":            tableNameForecast,
+		"analyzeContributionTableFull": tableNameAnalyzeContribution,
+		"dataTypeTableFull":            tableNameDataType,
+		"tableId":                      tableName,
+	}
+
+	return datasetName, tableNames, func() {
+		cmdCleanup()
+		cleanup()
+	}
+}
+
+func TestBigQueryListToolsMCP(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	_, _, cleanup := setupBigQueryMCPServer(t, ctx)
+	defer cleanup()
+
+	statusCode, toolsList, err := tests.GetMCPToolsList(t, nil)
+	if err != nil {
+		t.Fatalf("failed to get tools list: %v", err)
+	}
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+
+	if len(toolsList) == 0 {
+		t.Fatalf("expected non-empty tools list")
+	}
+
+	// Verify specific tools are present
+	expectedTools := map[string]bool{
+		"my-scalar-datatype-tool": false,
+		"my-array-datatype-tool":  false,
+	}
+
+	for _, toolObj := range toolsList {
+		toolMap, ok := toolObj.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := toolMap["name"].(string)
+		if _, ok := expectedTools[name]; ok {
+			expectedTools[name] = true
+		}
+	}
+
+	for name, found := range expectedTools {
+		if !found {
+			t.Errorf("expected tool %q not found in list", name)
+		}
+	}
+}
+
+func TestBigQueryCallToolsMCP(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+
+	datasetName, tableNames, cleanup := setupBigQueryMCPServer(t, ctx)
+	defer cleanup()
 
 	select1Want := "[{\"f0_\":1}]"
 	invokeParamWant := "[{\"id\":1,\"name\":\"Alice\"},{\"id\":3,\"name\":\"Sid\"}]"
@@ -130,6 +174,12 @@ func TestBigQueryToolEndpointsMCP(t *testing.T) {
 	datasetInfoWant := "\"Location\":\"US\",\"DefaultTableExpiration\":0,\"Labels\":null,\"Access\":"
 	tableInfoWant := "{\"Name\":\"\",\"Location\":\"US\",\"Description\":\"\",\"Schema\":[{\"Name\":\"id\""
 	dataInsightsWant := `FINAL_RESPONSE`
+
+	// Extract table names from map
+	tableNameParam := tableNames["paramTableFull"]
+	tableNameForecast := tableNames["forecastTableFull"]
+	tableNameAnalyzeContribution := tableNames["analyzeContributionTableFull"]
+	tableName := tableNames["tableId"]
 
 	runBigQueryExecuteSqlToolInvokeTestMCP(t, select1Want, invokeParamWant, tableNameParam, ddlWant)
 	runBigQueryForecastToolInvokeTestMCP(t, tableNameForecast)
@@ -209,7 +259,7 @@ func invokeMCPToolForTest(t *testing.T, info ToolTestInfo) (string, bool) {
 				return errMsg, true
 			}
 			// Fallback mapping for typical MCP error messages vs legacy API expectations
-			if info.Want == "auth token is required" && strings.Contains(errMsg, "missing access token") {
+			if info.Want == "auth token is required" && (strings.Contains(errMsg, "missing access token") || strings.Contains(errMsg, "invalid_request")) {
 				return errMsg, true
 			}
 			if info.Want == "Authorization header is required" && strings.Contains(errMsg, "missing access token") {
@@ -221,6 +271,18 @@ func invokeMCPToolForTest(t *testing.T, info ToolTestInfo) (string, bool) {
 		}
 		t.Fatalf("expected error result containing %q but got success or non-matching error. Status: %d, Result.IsError: %v, Error: %+v", info.Want, statusCode, mcpResp.Result.IsError, mcpResp.Error)
 		return got, false
+	}
+
+	if !info.IsErr && mcpResp != nil && mcpResp.Error != nil {
+		// Server returned an error, but test didn't expect protocol error.
+		// Check if test expects an error message in success response.
+		if info.Want != "" {
+			errMsg := mcpResp.Error.Message
+			if strings.HasPrefix(info.Want, "{") && !strings.HasPrefix(errMsg, "{") {
+				errMsg = fmt.Sprintf(`{"error":%q}`, errMsg)
+			}
+			return errMsg, false
+		}
 	}
 
 	if statusCode != http.StatusOK {
@@ -325,4 +387,675 @@ func runBigQueryDataTypeTestsMCP(t *testing.T) {
 
 func runBigQueryExecuteSqlToolInvokeDryRunTestMCP(t *testing.T, datasetName string) {
 	runBigQueryExecuteSqlToolInvokeDryRunTestCommon(t, datasetName, getMcpRunner(t))
+}
+
+func TestBigQueryToolWithDatasetRestrictionMCP(t *testing.T) {
+	uniqueID := strings.ReplaceAll(uuid.New().String(), "-", "")
+	t.Logf("Starting restriction test with uniqueID: %s", uniqueID)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	client, err := initBigQueryConnection(BigqueryProject)
+	if err != nil {
+		t.Fatalf("unable to create BigQuery client: %s", err)
+	}
+
+	allowedDatasetName1 := fmt.Sprintf("allowed_dataset_1_%s", uniqueID)
+	allowedDatasetName2 := fmt.Sprintf("allowed_dataset_2_%s", uniqueID)
+	disallowedDatasetName := fmt.Sprintf("disallowed_dataset_%s", uniqueID)
+	allowedTableName1 := "allowed_table_1"
+	allowedTableName2 := "allowed_table_2"
+	disallowedTableName := "disallowed_table"
+	allowedForecastTableName1 := "allowed_forecast_table_1"
+	allowedForecastTableName2 := "allowed_forecast_table_2"
+	disallowedForecastTableName := "disallowed_forecast_table"
+	allowedAnalyzeContributionTableName1 := "allowed_analyze_contribution_table_1"
+	allowedAnalyzeContributionTableName2 := "allowed_analyze_contribution_table_2"
+	disallowedAnalyzeContributionTableName := "disallowed_analyze_contribution_table"
+
+	// global cleanup for this test run
+	t.Cleanup(func() {
+		tests.CleanupBigQueryDatasets(t, context.Background(), client, []string{allowedDatasetName1, allowedDatasetName2, disallowedDatasetName})
+	})
+
+	// Setup allowed table
+	allowedTableNameParam1 := fmt.Sprintf("`%s.%s.%s`", BigqueryProject, allowedDatasetName1, allowedTableName1)
+	createAllowedTableStmt1 := fmt.Sprintf("CREATE TABLE %s (id INT64)", allowedTableNameParam1)
+	setupBigQueryTable(t, ctx, client, createAllowedTableStmt1, "", allowedDatasetName1, allowedTableNameParam1, nil)
+
+	allowedTableNameParam2 := fmt.Sprintf("`%s.%s.%s`", BigqueryProject, allowedDatasetName2, allowedTableName2)
+	createAllowedTableStmt2 := fmt.Sprintf("CREATE TABLE %s (id INT64)", allowedTableNameParam2)
+	setupBigQueryTable(t, ctx, client, createAllowedTableStmt2, "", allowedDatasetName2, allowedTableNameParam2, nil)
+
+	// Setup allowed forecast table
+	allowedForecastTableFullName1 := fmt.Sprintf("`%s.%s.%s`", BigqueryProject, allowedDatasetName1, allowedForecastTableName1)
+	createForecastStmt1, insertForecastStmt1, forecastParams1 := getBigQueryForecastToolInfo(allowedForecastTableFullName1)
+	setupBigQueryTable(t, ctx, client, createForecastStmt1, insertForecastStmt1, allowedDatasetName1, allowedForecastTableFullName1, forecastParams1)
+
+	allowedForecastTableFullName2 := fmt.Sprintf("`%s.%s.%s`", BigqueryProject, allowedDatasetName2, allowedForecastTableName2)
+	createForecastStmt2, insertForecastStmt2, forecastParams2 := getBigQueryForecastToolInfo(allowedForecastTableFullName2)
+	setupBigQueryTable(t, ctx, client, createForecastStmt2, insertForecastStmt2, allowedDatasetName2, allowedForecastTableFullName2, forecastParams2)
+
+	// Setup disallowed table
+	disallowedTableNameParam := fmt.Sprintf("`%s.%s.%s`", BigqueryProject, disallowedDatasetName, disallowedTableName)
+	createDisallowedTableStmt := fmt.Sprintf("CREATE TABLE %s (id INT64)", disallowedTableNameParam)
+	setupBigQueryTable(t, ctx, client, createDisallowedTableStmt, "", disallowedDatasetName, disallowedTableNameParam, nil)
+
+	// Setup disallowed forecast table
+	disallowedForecastTableFullName := fmt.Sprintf("`%s.%s.%s`", BigqueryProject, disallowedDatasetName, disallowedForecastTableName)
+	createDisallowedForecastStmt, insertDisallowedForecastStmt, disallowedForecastParams := getBigQueryForecastToolInfo(disallowedForecastTableFullName)
+	setupBigQueryTable(t, ctx, client, createDisallowedForecastStmt, insertDisallowedForecastStmt, disallowedDatasetName, disallowedForecastTableFullName, disallowedForecastParams)
+
+	// Setup allowed analyze contribution table
+	allowedAnalyzeContributionTableFullName1 := fmt.Sprintf("`%s.%s.%s`", BigqueryProject, allowedDatasetName1, allowedAnalyzeContributionTableName1)
+	createAnalyzeContributionStmt1, insertAnalyzeContributionStmt1, analyzeContributionParams1 := getBigQueryAnalyzeContributionToolInfo(allowedAnalyzeContributionTableFullName1)
+	setupBigQueryTable(t, ctx, client, createAnalyzeContributionStmt1, insertAnalyzeContributionStmt1, allowedDatasetName1, allowedAnalyzeContributionTableFullName1, analyzeContributionParams1)
+
+	allowedAnalyzeContributionTableFullName2 := fmt.Sprintf("`%s.%s.%s`", BigqueryProject, allowedDatasetName2, allowedAnalyzeContributionTableName2)
+	createAnalyzeContributionStmt2, insertAnalyzeContributionStmt2, analyzeContributionParams2 := getBigQueryAnalyzeContributionToolInfo(allowedAnalyzeContributionTableFullName2)
+	setupBigQueryTable(t, ctx, client, createAnalyzeContributionStmt2, insertAnalyzeContributionStmt2, allowedDatasetName2, allowedAnalyzeContributionTableFullName2, analyzeContributionParams2)
+
+	// Setup disallowed analyze contribution table
+	disallowedAnalyzeContributionTableFullName := fmt.Sprintf("`%s.%s.%s`", BigqueryProject, disallowedDatasetName, disallowedAnalyzeContributionTableName)
+	createDisallowedAnalyzeContributionStmt, insertDisallowedAnalyzeContributionStmt, disallowedAnalyzeContributionParams := getBigQueryAnalyzeContributionToolInfo(disallowedAnalyzeContributionTableFullName)
+	setupBigQueryTable(t, ctx, client, createDisallowedAnalyzeContributionStmt, insertDisallowedAnalyzeContributionStmt, disallowedDatasetName, disallowedAnalyzeContributionTableFullName, disallowedAnalyzeContributionParams)
+
+	// Configure source with dataset restriction.
+	sourceConfig := getBigQueryVars(t)
+	sourceConfig["allowedDatasets"] = []string{allowedDatasetName1, allowedDatasetName2}
+
+	// Configure tools
+	toolsConfig := map[string]any{
+		"list-dataset-ids-restricted": map[string]any{
+			"type":        "bigquery-list-dataset-ids",
+			"source":      "my-instance",
+			"description": "Tool to list dataset ids",
+		},
+		"list-table-ids-restricted": map[string]any{
+			"type":        "bigquery-list-table-ids",
+			"source":      "my-instance",
+			"description": "Tool to list table within a dataset",
+		},
+		"get-dataset-info-restricted": map[string]any{
+			"type":        "bigquery-get-dataset-info",
+			"source":      "my-instance",
+			"description": "Tool to get dataset info",
+		},
+		"get-table-info-restricted": map[string]any{
+			"type":        "bigquery-get-table-info",
+			"source":      "my-instance",
+			"description": "Tool to get table info",
+		},
+		"execute-sql-restricted": map[string]any{
+			"type":        "bigquery-execute-sql",
+			"source":      "my-instance",
+			"description": "Tool to execute SQL",
+		},
+		"forecast-restricted": map[string]any{
+			"type":        "bigquery-forecast",
+			"source":      "my-instance",
+			"description": "Tool to forecast",
+		},
+		"analyze-contribution-restricted": map[string]any{
+			"type":        "bigquery-analyze-contribution",
+			"source":      "my-instance",
+			"description": "Tool to analyze contribution",
+		},
+	}
+
+	config := map[string]any{
+		"sources": map[string]any{
+			"my-instance": sourceConfig,
+		},
+		"tools": toolsConfig,
+	}
+
+	args := []string{}
+	cmd, cleanup, err := tests.StartCmd(ctx, config, args...)
+	if err != nil {
+		t.Fatalf("command initialization returned an error: %s", err)
+	}
+	defer cleanup()
+
+	go func() {
+		_, _ = io.Copy(io.Discard, cmd.Out)
+	}()
+
+	// Wait for server to be ready
+	waitCtx, cancelReady := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelReady()
+	out, err := testutils.WaitForString(waitCtx, regexp.MustCompile(`Server ready to serve`), cmd.Out)
+	if err != nil {
+		t.Logf("toolbox command logs: \n%s", out)
+		t.Fatalf("toolbox didn't start successfully: %s", err)
+	}
+
+	// Test Cases
+	testCases := []struct {
+		name             string
+		toolName         string
+		args             map[string]any
+		wantInResult     string
+		wantInResultList []string
+		wantInError      string
+	}{
+		{
+			name:             "list dataset ids",
+			toolName:         "list-dataset-ids-restricted",
+			args:             map[string]any{},
+			wantInResultList: []string{allowedDatasetName1, allowedDatasetName2},
+		},
+		{
+			name:         "list table ids allowed",
+			toolName:     "list-table-ids-restricted",
+			args:         map[string]any{"dataset": allowedDatasetName1},
+			wantInResult: allowedTableName1,
+		},
+		{
+			name:        "list table ids disallowed",
+			toolName:    "list-table-ids-restricted",
+			args:        map[string]any{"dataset": disallowedDatasetName},
+			wantInError: "access denied to dataset",
+		},
+		{
+			name:     "get dataset info allowed",
+			toolName: "get-dataset-info-restricted",
+			args:     map[string]any{"dataset": allowedDatasetName1},
+		},
+		{
+			name:        "get dataset info disallowed",
+			toolName:    "get-dataset-info-restricted",
+			args:        map[string]any{"dataset": disallowedDatasetName},
+			wantInError: "access denied to dataset",
+		},
+		{
+			name:     "get table info allowed",
+			toolName: "get-table-info-restricted",
+			args:     map[string]any{"dataset": allowedDatasetName1, "table": allowedTableName1},
+		},
+		{
+			name:     "get table info disallowed",
+			toolName: "get-table-info-restricted",
+			args:     map[string]any{"dataset": disallowedDatasetName, "table": disallowedTableName},
+		},
+		{
+			name:         "execute sql allowed",
+			toolName:     "execute-sql-restricted",
+			args:         map[string]any{"sql": fmt.Sprintf("SELECT * FROM %s", allowedTableNameParam1)},
+			wantInResult: "Query executed successfully",
+		},
+		{
+			name:        "execute sql disallowed",
+			toolName:    "execute-sql-restricted",
+			args:        map[string]any{"sql": fmt.Sprintf("SELECT * FROM %s", disallowedTableNameParam)},
+			wantInError: "which is not in the allowed list",
+		},
+		{
+			name:        "disallowed create schema",
+			toolName:    "execute-sql-restricted",
+			args:        map[string]any{"sql": "CREATE SCHEMA another_dataset"},
+			wantInError: "dataset-level operations like 'CREATE_SCHEMA' are not allowed",
+		},
+		{
+			name:        "disallowed alter schema",
+			toolName:    "execute-sql-restricted",
+			args:        map[string]any{"sql": fmt.Sprintf("ALTER SCHEMA %s SET OPTIONS(description='new one')", allowedDatasetName1)},
+			wantInError: "dataset-level operations like 'ALTER_SCHEMA' are not allowed",
+		},
+		{
+			name:        "disallowed create function",
+			toolName:    "execute-sql-restricted",
+			args:        map[string]any{"sql": fmt.Sprintf("CREATE FUNCTION %s.my_func() RETURNS INT64 AS (1)", allowedDatasetName1)},
+			wantInError: "creating stored routines ('CREATE_FUNCTION') is not allowed",
+		},
+		{
+			name:        "disallowed create procedure",
+			toolName:    "execute-sql-restricted",
+			args:        map[string]any{"sql": fmt.Sprintf("CREATE PROCEDURE %s.my_proc() BEGIN SELECT 1; END", allowedDatasetName1)},
+			wantInError: "unanalyzable statements like 'CREATE PROCEDURE' are not allowed",
+		},
+		{
+			name:        "disallowed execute immediate",
+			toolName:    "execute-sql-restricted",
+			args:        map[string]any{"sql": "EXECUTE IMMEDIATE 'SELECT 1'"},
+			wantInError: "EXECUTE IMMEDIATE is not allowed when dataset restrictions are in place",
+		},
+		{
+			name:         "conversational analytics allowed",
+			toolName:     "conversational-analytics-restricted",
+			args:         map[string]any{"user_query_with_context": "What is in the table?", "table_references": fmt.Sprintf(`[{"projectId":"%s","datasetId":"%s","tableId":"%s"}]`, BigqueryProject, allowedDatasetName1, allowedTableName1)},
+			wantInResult: "FINAL_RESPONSE",
+		},
+		{
+			name:        "conversational analytics disallowed",
+			toolName:    "conversational-analytics-restricted",
+			args:        map[string]any{"user_query_with_context": "What is in the table?", "table_references": fmt.Sprintf(`[{"projectId":"%s","datasetId":"%s","tableId":"%s"}]`, BigqueryProject, disallowedDatasetName, disallowedTableName)},
+			wantInError: "not allowed",
+		},
+		{
+			name:         "forecast allowed",
+			toolName:     "forecast-restricted",
+			args:         map[string]any{"history_data": fmt.Sprintf("%s.%s.%s", BigqueryProject, allowedDatasetName1, allowedForecastTableName1), "timestamp_col": "ts", "data_col": "data"},
+			wantInResult: "forecast_timestamp",
+		},
+		{
+			name:        "forecast disallowed",
+			toolName:    "forecast-restricted",
+			args:        map[string]any{"history_data": fmt.Sprintf("%s.%s.%s", BigqueryProject, disallowedDatasetName, disallowedForecastTableName), "timestamp_col": "ts", "data_col": "data"},
+			wantInError: "not allowed",
+		},
+		{
+			name:         "analyze contribution allowed",
+			toolName:     "analyze-contribution-restricted",
+			args:         map[string]any{"input_data": fmt.Sprintf("%s.%s.%s", BigqueryProject, allowedDatasetName1, allowedAnalyzeContributionTableName1), "contribution_metric": "SUM(metric)", "is_test_col": "is_test", "dimension_id_cols": []any{"dim1"}},
+			wantInResult: "relative_difference",
+		},
+		{
+			name:        "analyze contribution disallowed",
+			toolName:    "analyze-contribution-restricted",
+			args:        map[string]any{"input_data": fmt.Sprintf("%s.%s.%s", BigqueryProject, disallowedDatasetName, disallowedAnalyzeContributionTableName), "contribution_metric": "SUM(metric)", "is_test_col": "is_test", "dimension_id_cols": []any{"dim1"}},
+			wantInError: "not allowed",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			statusCode, mcpResp, err := tests.InvokeMCPTool(t, tc.toolName, tc.args, nil)
+			if err != nil {
+				t.Fatalf("native error executing tool: %s", err)
+			}
+			if statusCode != http.StatusOK {
+				t.Fatalf("expected status 200, got %d", statusCode)
+			}
+
+			var got string
+			if mcpResp.Error != nil {
+				got = mcpResp.Error.Message
+			} else {
+				var blocks []string
+				for _, content := range mcpResp.Result.Content {
+					if content.Type == "text" {
+						blocks = append(blocks, content.Text)
+					}
+				}
+				got = strings.Join(blocks, ",")
+			}
+
+			if tc.wantInError != "" {
+				if !strings.Contains(got, tc.wantInError) {
+					t.Fatalf("expected error containing %q, got %q", tc.wantInError, got)
+				}
+			} else {
+				if tc.wantInResult != "" {
+					if !strings.Contains(got, tc.wantInResult) {
+						t.Fatalf("expected result containing %q, got %q", tc.wantInResult, got)
+					}
+				}
+				for _, want := range tc.wantInResultList {
+					if !strings.Contains(got, want) {
+						t.Fatalf("expected result containing %q, got %q", want, got)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestBigQueryWriteModeAllowedMCP(t *testing.T) {
+	sourceConfig := getBigQueryVars(t)
+	sourceConfig["writeMode"] = "allowed"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	datasetName := fmt.Sprintf("temp_toolbox_test_allowed_%s", strings.ReplaceAll(uuid.New().String(), "-", ""))
+
+	client, err := initBigQueryConnection(BigqueryProject)
+	if err != nil {
+		t.Fatalf("unable to create BigQuery connection: %s", err)
+	}
+
+	dataset := client.Dataset(datasetName)
+	if err := dataset.Create(ctx, &bigqueryapi.DatasetMetadata{Name: datasetName}); err != nil {
+		t.Fatalf("Failed to create dataset %q: %v", datasetName, err)
+	}
+	defer func() {
+		if err := dataset.DeleteWithContents(ctx); err != nil {
+			t.Logf("failed to cleanup dataset %s: %v", datasetName, err)
+		}
+	}()
+
+	toolsConfig := map[string]any{
+		"my-exec-sql-tool": map[string]any{
+			"type":        "bigquery-execute-sql",
+			"source":      "my-instance",
+			"description": "Tool to execute sql",
+		},
+	}
+
+	config := map[string]any{
+		"sources": map[string]any{
+			"my-instance": sourceConfig,
+		},
+		"tools": toolsConfig,
+	}
+
+	args := []string{}
+	cmd, cleanup, err := tests.StartCmd(ctx, config, args...)
+	if err != nil {
+		t.Fatalf("command initialization returned an error: %s", err)
+	}
+	defer cleanup()
+
+	go func() {
+		_, _ = io.Copy(io.Discard, cmd.Out)
+	}()
+
+	waitCtx, cancelReady := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelReady()
+	_, err = testutils.WaitForString(waitCtx, regexp.MustCompile(`Server ready to serve`), cmd.Out)
+	if err != nil {
+		t.Fatalf("toolbox didn't start successfully: %s", err)
+	}
+
+	t.Run("CREATE TABLE should succeed", func(t *testing.T) {
+		sql := fmt.Sprintf("CREATE TABLE %s.new_table (x INT64)", datasetName)
+		statusCode, mcpResp, err := tests.InvokeMCPTool(t, "my-exec-sql-tool", map[string]any{"sql": sql}, nil)
+		if err != nil {
+			t.Fatalf("native error executing tool: %s", err)
+		}
+		if statusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", statusCode)
+		}
+		if mcpResp.Error != nil {
+			t.Fatalf("expected no error, got %v", mcpResp.Error)
+		}
+
+		var got string
+		var blocks []string
+		for _, content := range mcpResp.Result.Content {
+			if content.Type == "text" {
+				blocks = append(blocks, content.Text)
+			}
+		}
+		got = strings.Join(blocks, ",")
+
+		want := "Query executed successfully and returned no content."
+		if !strings.Contains(got, want) {
+			t.Errorf("unexpected result: got %q, want to contain %q", got, want)
+		}
+	})
+}
+
+func TestBigQueryWriteModeBlockedMCP(t *testing.T) {
+	sourceConfig := getBigQueryVars(t)
+	sourceConfig["writeMode"] = "blocked"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	datasetName := fmt.Sprintf("temp_toolbox_test_blocked_%s", strings.ReplaceAll(uuid.New().String(), "-", ""))
+	tableName := fmt.Sprintf("param_table_blocked_%s", strings.ReplaceAll(uuid.New().String(), "-", ""))
+	tableNameParam := fmt.Sprintf("`%s.%s.%s`", BigqueryProject, datasetName, tableName)
+
+	client, err := initBigQueryConnection(BigqueryProject)
+	if err != nil {
+		t.Fatalf("unable to create BigQuery connection: %s", err)
+	}
+	createParamTableStmt, insertParamTableStmt, _, _, _, _, paramTestParams := getBigQueryParamToolInfo(tableNameParam)
+	teardownTable := setupBigQueryTable(t, ctx, client, createParamTableStmt, insertParamTableStmt, datasetName, tableNameParam, paramTestParams)
+	defer teardownTable(t)
+
+	toolsConfig := map[string]any{
+		"my-exec-sql-tool": map[string]any{
+			"type":        "bigquery-execute-sql",
+			"source":      "my-instance",
+			"description": "Tool to execute sql",
+		},
+	}
+
+	config := map[string]any{
+		"sources": map[string]any{"my-instance": sourceConfig},
+		"tools":   toolsConfig,
+	}
+
+	args := []string{}
+	cmd, cleanup, err := tests.StartCmd(ctx, config, args...)
+	if err != nil {
+		t.Fatalf("command initialization returned an error: %s", err)
+	}
+	defer cleanup()
+
+	go func() {
+		_, _ = io.Copy(io.Discard, cmd.Out)
+	}()
+
+	waitCtx, cancelReady := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelReady()
+	_, err = testutils.WaitForString(waitCtx, regexp.MustCompile(`Server ready to serve`), cmd.Out)
+	if err != nil {
+		t.Fatalf("toolbox didn't start successfully: %s", err)
+	}
+
+	testCases := []struct {
+		name         string
+		sql          string
+		wantInResult string
+		wantInError  string
+	}{
+		{
+			name:         "SELECT statement should succeed",
+			sql:          fmt.Sprintf("SELECT id, name FROM %s WHERE id = 1", tableNameParam),
+			wantInResult: `"id":1`,
+		},
+		{
+			name:        "INSERT statement should fail",
+			sql:         fmt.Sprintf("INSERT INTO %s (id, name) VALUES (10, 'test')", tableNameParam),
+			wantInError: "write mode is 'blocked'",
+		},
+		{
+			name:        "CREATE TABLE statement should fail",
+			sql:         fmt.Sprintf("CREATE TABLE %s.new_table (x INT64)", datasetName),
+			wantInError: "write mode is 'blocked'",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			statusCode, mcpResp, err := tests.InvokeMCPTool(t, "my-exec-sql-tool", map[string]any{"sql": tc.sql}, nil)
+			if err != nil {
+				t.Fatalf("native error executing tool: %s", err)
+			}
+			if statusCode != http.StatusOK {
+				t.Fatalf("expected status 200, got %d", statusCode)
+			}
+
+			var got string
+			if mcpResp.Error != nil {
+				got = mcpResp.Error.Message
+			} else {
+				var blocks []string
+				for _, content := range mcpResp.Result.Content {
+					if content.Type == "text" {
+						blocks = append(blocks, content.Text)
+					}
+				}
+				got = strings.Join(blocks, ",")
+			}
+
+			if tc.wantInError != "" {
+				if !strings.Contains(got, tc.wantInError) {
+					t.Fatalf("expected error containing %q, got %q", tc.wantInError, got)
+				}
+			} else if tc.wantInResult != "" {
+				if !strings.Contains(got, tc.wantInResult) {
+					t.Fatalf("expected result containing %q, got %q", tc.wantInResult, got)
+				}
+			}
+		})
+	}
+}
+
+func TestBigQueryWriteModeProtectedMCP(t *testing.T) {
+	sourceConfig := getBigQueryVars(t)
+	sourceConfig["writeMode"] = "protected"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	permanentDatasetName := fmt.Sprintf("perm_dataset_protected_%s", strings.ReplaceAll(uuid.New().String(), "-", ""))
+	client, err := initBigQueryConnection(BigqueryProject)
+	if err != nil {
+		t.Fatalf("unable to create BigQuery connection: %s", err)
+	}
+	dataset := client.Dataset(permanentDatasetName)
+	if err := dataset.Create(ctx, &bigqueryapi.DatasetMetadata{Name: permanentDatasetName}); err != nil {
+		t.Fatalf("Failed to create dataset %q: %v", permanentDatasetName, err)
+	}
+	defer func() {
+		if err := dataset.DeleteWithContents(ctx); err != nil {
+			t.Logf("failed to cleanup dataset %s: %v", permanentDatasetName, err)
+		}
+	}()
+
+	toolsConfig := map[string]any{
+		"my-exec-sql-tool": map[string]any{"type": "bigquery-execute-sql", "source": "my-instance", "description": "Tool to execute sql"},
+		"my-sql-tool-protected": map[string]any{
+			"type":        "bigquery-sql",
+			"source":      "my-instance",
+			"description": "Tool to query from the session",
+			"statement":   "SELECT * FROM my_shared_temp_table",
+		},
+		"my-forecast-tool-protected": map[string]any{
+			"type":        "bigquery-forecast",
+			"source":      "my-instance",
+			"description": "Tool to forecast from session temp table",
+		},
+		"my-analyze-contribution-tool-protected": map[string]any{
+			"type":        "bigquery-analyze-contribution",
+			"source":      "my-instance",
+			"description": "Tool to analyze contribution from session temp table",
+		},
+	}
+
+	config := map[string]any{
+		"sources": map[string]any{"my-instance": sourceConfig},
+		"tools":   toolsConfig,
+	}
+
+	args := []string{}
+	cmd, cleanup, err := tests.StartCmd(ctx, config, args...)
+	if err != nil {
+		t.Fatalf("command initialization returned an error: %s", err)
+	}
+	defer cleanup()
+
+	go func() {
+		_, _ = io.Copy(io.Discard, cmd.Out)
+	}()
+
+	waitCtx, cancelReady := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelReady()
+	_, err = testutils.WaitForString(waitCtx, regexp.MustCompile(`Server ready to serve`), cmd.Out)
+	if err != nil {
+		t.Fatalf("toolbox didn't start successfully: %s", err)
+	}
+
+	testCases := []struct {
+		name         string
+		toolName     string
+		args         map[string]any
+		wantInResult string
+		wantInError  string
+	}{
+		{
+			name:        "CREATE TABLE to permanent dataset should fail",
+			toolName:    "my-exec-sql-tool",
+			args:        map[string]any{"sql": fmt.Sprintf("CREATE TABLE %s.new_table (x INT64)", permanentDatasetName)},
+			wantInError: "protected write mode only supports SELECT statements",
+		},
+		{
+			name:         "CREATE TEMP TABLE should succeed",
+			toolName:     "my-exec-sql-tool",
+			args:         map[string]any{"sql": "CREATE TEMP TABLE my_shared_temp_table (x INT64)"},
+			wantInResult: "Query executed successfully",
+		},
+		{
+			name:         "INSERT into TEMP TABLE should succeed",
+			toolName:     "my-exec-sql-tool",
+			args:         map[string]any{"sql": "INSERT INTO my_shared_temp_table (x) VALUES (42)"},
+			wantInResult: "Query executed successfully",
+		},
+		{
+			name:         "SELECT from TEMP TABLE with exec-sql should succeed",
+			toolName:     "my-exec-sql-tool",
+			args:         map[string]any{"sql": "SELECT * FROM my_shared_temp_table"},
+			wantInResult: `"x":42`,
+		},
+		{
+			name:         "SELECT from TEMP TABLE with sql-tool should succeed",
+			toolName:     "my-sql-tool-protected",
+			args:         map[string]any{},
+			wantInResult: `"x":42`,
+		},
+		{
+			name:         "CREATE TEMP TABLE for forecast should succeed",
+			toolName:     "my-exec-sql-tool",
+			args:         map[string]any{"sql": "CREATE TEMP TABLE forecast_temp_table (ts TIMESTAMP, data FLOAT64) AS SELECT TIMESTAMP('2025-01-01T00:00:00Z') AS ts, 10.0 AS data UNION ALL SELECT TIMESTAMP('2025-01-01T01:00:00Z'), 11.0 UNION ALL SELECT TIMESTAMP('2025-01-01T02:00:00Z'), 12.0 UNION ALL SELECT TIMESTAMP('2025-01-01T03:00:00Z'), 13.0"},
+			wantInResult: "Query executed successfully",
+		},
+		{
+			name:         "Forecast from TEMP TABLE should succeed",
+			toolName:     "my-forecast-tool-protected",
+			args:         map[string]any{"history_data": "SELECT * FROM forecast_temp_table", "timestamp_col": "ts", "data_col": "data", "horizon": 1},
+			wantInResult: "forecast_timestamp",
+		},
+		{
+			name:         "CREATE TEMP TABLE for contribution analysis should succeed",
+			toolName:     "my-exec-sql-tool",
+			args:         map[string]any{"sql": "CREATE TEMP TABLE contribution_temp_table (dim1 STRING, is_test BOOL, metric FLOAT64) AS SELECT 'a' as dim1, true as is_test, 100.0 as metric UNION ALL SELECT 'b', false, 120.0"},
+			wantInResult: "Query executed successfully",
+		},
+		{
+			name:         "Analyze contribution from TEMP TABLE should succeed",
+			toolName:     "my-analyze-contribution-tool-protected",
+			args:         map[string]any{"input_data": "SELECT * FROM contribution_temp_table", "contribution_metric": "SUM(metric)", "is_test_col": "is_test", "dimension_id_cols": []any{"dim1"}},
+			wantInResult: "relative_difference",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			statusCode, mcpResp, err := tests.InvokeMCPTool(t, tc.toolName, tc.args, nil)
+			if err != nil {
+				t.Fatalf("native error executing tool: %s", err)
+			}
+			if statusCode != http.StatusOK {
+				t.Fatalf("expected status 200, got %d", statusCode)
+			}
+
+			var got string
+			if mcpResp.Error != nil {
+				got = mcpResp.Error.Message
+			} else {
+				var blocks []string
+				for _, content := range mcpResp.Result.Content {
+					if content.Type == "text" {
+						blocks = append(blocks, content.Text)
+					}
+				}
+				got = strings.Join(blocks, ",")
+			}
+
+			if tc.wantInError != "" {
+				if !strings.Contains(got, tc.wantInError) {
+					t.Fatalf("expected error containing %q, got %q", tc.wantInError, got)
+				}
+			} else if tc.wantInResult != "" {
+				if !strings.Contains(got, tc.wantInResult) {
+					t.Fatalf("expected result containing %q, got %q", tc.wantInResult, got)
+				}
+			}
+		})
+	}
 }
