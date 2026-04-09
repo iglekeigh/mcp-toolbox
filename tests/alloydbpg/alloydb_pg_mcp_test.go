@@ -14,6 +14,9 @@
 
 package alloydbpg
 
+// TODO: We may want to add tests for custom tools defined in alloydb-postgres.yaml
+// in the future, rather than just testing the prebuilt tools.
+
 import (
 	"context"
 	"fmt"
