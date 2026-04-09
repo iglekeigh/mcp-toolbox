@@ -156,11 +156,11 @@ func InvokeMCPTool(t *testing.T, toolName string, arguments map[string]any, requ
 	return resp.StatusCode, &mcpResp, nil
 }
 
-// getMCPResultText safely extracts the text from content blocks, unmarshaling them if they are valid JSON.
+// GetMCPResultText safely extracts the text from content blocks, unmarshaling them if they are valid JSON.
 //
 // TODO: For tests that need to strictly validate the exact schema or structure of the output,
 // consider avoiding this helper and instead unmarshal the raw JSON directly into expected Go structs for comparison.
-func getMCPResultText(t *testing.T, resp *MCPCallToolResponse) []any {
+func GetMCPResultText(t *testing.T, resp *MCPCallToolResponse) []any {
 	if len(resp.Result.Content) == 0 {
 		return []any{}
 	}
@@ -300,7 +300,7 @@ func RunMCPCustomToolCallMethod(t *testing.T, toolName string, arguments map[str
 	if mcpResp.Result.IsError {
 		t.Fatalf("%s returned error result: %v", toolName, mcpResp.Result)
 	}
-	got := getMCPResultText(t, mcpResp)
+	got := GetMCPResultText(t, mcpResp)
 	gotBytes, _ := json.Marshal(got)
 	gotStr := string(gotBytes)
 	if !strings.Contains(gotStr, want) {
@@ -401,7 +401,7 @@ func RunMCPToolInvokeTest(t *testing.T, select1Want string, options ...InvokeTes
 			if mcpResp.Result.IsError {
 				t.Fatalf("%s returned error result: %v", tc.toolName, mcpResp.Result)
 			}
-			got := getMCPResultText(t, mcpResp)
+			got := GetMCPResultText(t, mcpResp)
 			gotBytes, _ := json.Marshal(got)
 			gotStr := string(gotBytes)
 			if !strings.Contains(gotStr, tc.wantResult) {
@@ -469,7 +469,7 @@ func RunMCPPostgresListViewsTest(t *testing.T, ctx context.Context, pool *pgxpoo
 				t.Fatalf("list_views returned error result: %v", mcpResp.Result)
 			}
 
-			got := getMCPResultText(t, mcpResp)
+			got := GetMCPResultText(t, mcpResp)
 
 			var wantObj []any
 			if err := json.Unmarshal([]byte(tc.want), &wantObj); err != nil {
@@ -621,7 +621,7 @@ func RunMCPPostgresListTablesTest(t *testing.T, ctx context.Context, pool *pgxpo
 				t.Fatalf("list_tables returned error result: %v", mcpResp.Result)
 			}
 
-			got := getMCPResultText(t, mcpResp)
+			got := GetMCPResultText(t, mcpResp)
 
 			var wantObj []any
 			if err := json.Unmarshal([]byte(tc.want), &wantObj); err != nil {
@@ -712,7 +712,7 @@ func RunMCPPostgresListQueryStatsTest(t *testing.T, ctx context.Context, pool *p
 				t.Fatalf("list_query_stats returned error result: %v", mcpResp.Result)
 			}
 
-			got := getMCPResultText(t, mcpResp)
+			got := GetMCPResultText(t, mcpResp)
 
 			// Verify that we got a list (even if empty)
 			if got == nil {
@@ -790,7 +790,7 @@ func RunMCPPostgresListSchemasTest(t *testing.T, ctx context.Context, pool *pgxp
 			if mcpResp.Result.IsError {
 				t.Fatalf("list_schemas returned error result: %v", mcpResp.Result)
 			}
-			gotObj := getMCPResultText(t, mcpResp)
+			gotObj := GetMCPResultText(t, mcpResp)
 
 			if tc.compareSubset {
 				found := false
@@ -907,12 +907,14 @@ func RunMCPPostgresListActiveQueriesTest(t *testing.T, ctx context.Context, pool
 				t.Fatalf("list_active_queries returned error result: %v", mcpResp.Result)
 			}
 			var details []queryListDetails
-			gotObj := getMCPResultText(t, mcpResp)
+			gotObj := GetMCPResultText(t, mcpResp)
 			for _, item := range gotObj {
 				if m, ok := item.(map[string]any); ok {
 					if q, ok := m["query"].(string); ok {
 						details = append(details, queryListDetails{Query: q})
 					}
+				}
+			}
 				}
 			}
 
@@ -1100,7 +1102,7 @@ func RunMCPPostgresListTriggersTest(t *testing.T, ctx context.Context, pool *pgx
 			if mcpResp.Result.IsError {
 				t.Fatalf("list_triggers returned error result: %v", mcpResp.Result)
 			}
-			gotObj := getMCPResultText(t, mcpResp)
+			gotObj := GetMCPResultText(t, mcpResp)
 
 			if tc.compareSubset {
 				found := false
@@ -1204,7 +1206,7 @@ func RunMCPPostgresListSequencesTest(t *testing.T, ctx context.Context, pool *pg
 			if mcpResp.Result.IsError {
 				t.Fatalf("list_sequences returned error result: %v", mcpResp.Result)
 			}
-			gotObj := getMCPResultText(t, mcpResp)
+			gotObj := GetMCPResultText(t, mcpResp)
 			wantObj := []any{}
 			for _, item := range tc.want {
 				wantObj = append(wantObj, item)
@@ -1212,6 +1214,7 @@ func RunMCPPostgresListSequencesTest(t *testing.T, ctx context.Context, pool *pg
 			if diff := cmp.Diff(wantObj, gotObj); diff != "" {
 				t.Errorf("Unexpected result mismatch (-want +got):\n%s", diff)
 			}
+
 
 		})
 	}
@@ -1338,7 +1341,7 @@ func RunMCPPostgresListIndexesTest(t *testing.T, ctx context.Context, pool *pgxp
 			if mcpResp.Result.IsError {
 				t.Fatalf("list_indexes returned error result: %v", mcpResp.Result)
 			}
-			gotObj := getMCPResultText(t, mcpResp)
+			gotObj := GetMCPResultText(t, mcpResp)
 
 			if tc.compareSubset {
 				for _, wantIdx := range tc.want {
@@ -1528,7 +1531,7 @@ func RunMCPPostgresListStoredProcedureTest(t *testing.T, ctx context.Context, po
 				t.Fatalf("list_stored_procedure returned error result: %v", mcpResp.Result)
 			}
 			var gotObj []storedProcedureDetails
-			got := getMCPResultText(t, mcpResp)
+			got := GetMCPResultText(t, mcpResp)
 			for _, item := range got {
 				if m, ok := item.(map[string]any); ok {
 					proc := storedProcedureDetails{}
@@ -1543,6 +1546,8 @@ func RunMCPPostgresListStoredProcedureTest(t *testing.T, ctx context.Context, po
 					}
 
 					gotObj = append(gotObj, proc)
+				}
+			}
 				}
 			}
 
@@ -1575,7 +1580,7 @@ func RunMCPPostgresDatabaseOverviewTest(t *testing.T, ctx context.Context, pool 
 	if mcpResp.Result.IsError {
 		t.Fatalf("database_overview returned error result: %v", mcpResp.Result)
 	}
-	gotObj := getMCPResultText(t, mcpResp)
+	gotObj := GetMCPResultText(t, mcpResp)
 
 	if len(gotObj) != 1 {
 		t.Fatalf("Expected exactly one row in the result, got %d", len(gotObj))
@@ -1643,7 +1648,7 @@ func RunMCPPostgresListLocksTest(t *testing.T, ctx context.Context, pool *pgxpoo
 	if mcpResp.Result.IsError {
 		t.Fatalf("list_locks returned error result: %v", mcpResp.Result)
 	}
-	gotObj := getMCPResultText(t, mcpResp)
+	gotObj := GetMCPResultText(t, mcpResp)
 
 	if len(gotObj) == 0 {
 		t.Errorf("Expected to find locks, got none")
@@ -1772,7 +1777,7 @@ func RunMCPPostgresGetColumnCardinalityTest(t *testing.T, ctx context.Context, p
 				t.Logf("DEBUG: get_column_cardinality returned empty content as expected for non-existent table")
 				return
 			}
-			gotObj := getMCPResultText(t, mcpResp)
+			gotObj := GetMCPResultText(t, mcpResp)
 
 			if tc.shouldHaveData {
 				if len(gotObj) == 0 {
@@ -1924,7 +1929,7 @@ func RunMCPPostgresListTableStatsTest(t *testing.T, ctx context.Context, pool *p
 				t.Fatalf("list_table_stats returned error result: %v", mcpResp.Result)
 			}
 
-			gotObj := getMCPResultText(t, mcpResp)
+			gotObj := GetMCPResultText(t, mcpResp)
 
 			// Verify expected data presence
 			if tc.shouldHaveData {
@@ -2029,7 +2034,7 @@ func RunMCPPostgresListPublicationTablesTest(t *testing.T, ctx context.Context, 
 	if mcpResp.Result.IsError {
 		t.Fatalf("list_publication_tables returned error result: %v", mcpResp.Result)
 	}
-	gotObj := getMCPResultText(t, mcpResp)
+	gotObj := GetMCPResultText(t, mcpResp)
 
 	found := false
 	for _, rowObj := range gotObj {
@@ -2104,7 +2109,7 @@ func RunMCPPostgresListPgSettingsTest(t *testing.T, ctx context.Context, pool *p
 	if mcpResp.Result.IsError {
 		t.Fatalf("list_pg_settings returned error result: %v", mcpResp.Result)
 	}
-	gotObj := getMCPResultText(t, mcpResp)
+	gotObj := GetMCPResultText(t, mcpResp)
 
 	if len(gotObj) != 1 {
 		t.Fatalf("Expected exactly one row in the result, got %d", len(gotObj))
@@ -2160,7 +2165,7 @@ func RunMCPPostgresListDatabaseStatsTest(t *testing.T, ctx context.Context, pool
 	if mcpResp.Result.IsError {
 		t.Fatalf("list_database_stats returned error result: %v", mcpResp.Result)
 	}
-	gotObj := getMCPResultText(t, mcpResp)
+	gotObj := GetMCPResultText(t, mcpResp)
 
 	found := false
 	for _, rowObj := range gotObj {
@@ -2234,7 +2239,7 @@ func RunMCPPostgresListRolesTest(t *testing.T, ctx context.Context, pool *pgxpoo
 	if mcpResp.Result.IsError {
 		t.Fatalf("list_roles returned error result: %v", mcpResp.Result)
 	}
-	gotObj := getMCPResultText(t, mcpResp)
+	gotObj := GetMCPResultText(t, mcpResp)
 
 	found := false
 	for _, rowObj := range gotObj {
