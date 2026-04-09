@@ -28,10 +28,10 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/googleapis/genai-toolbox/internal/testutils"
-	"github.com/googleapis/genai-toolbox/tests"
+	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/tests"
 
-	_ "github.com/googleapis/genai-toolbox/internal/tools/cloudsql/cloudsqlcreatedatabase"
+	_ "github.com/googleapis/mcp-toolbox/internal/tools/cloudsql/cloudsqlcreatedatabase"
 )
 
 var (

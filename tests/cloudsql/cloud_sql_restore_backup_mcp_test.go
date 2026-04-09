@@ -27,11 +27,11 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/googleapis/genai-toolbox/internal/testutils"
-	"github.com/googleapis/genai-toolbox/tests"
+	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/tests"
 	sqladmin "google.golang.org/api/sqladmin/v1"
 
-	_ "github.com/googleapis/genai-toolbox/internal/tools/cloudsql/cloudsqlrestorebackup"
+	_ "github.com/googleapis/mcp-toolbox/internal/tools/cloudsql/cloudsqlrestorebackup"
 )
 
 var (
