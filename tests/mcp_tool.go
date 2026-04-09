@@ -273,9 +273,8 @@ func RunMCPToolsListMethod(t *testing.T, ctx context.Context, expectedOutput []M
 		for _, actual := range actualTools {
 			if actual.Name == expected.Name {
 				found = true
-				// Use reflect.DeepEqual to check all fields (description, parameters, etc.)
-				if !reflect.DeepEqual(actual, expected) {
-					t.Fatalf("tool %s mismatch:\nwant: %+v\ngot: %+v", expected.Name, expected, actual)
+				if diff := cmp.Diff(expected, actual); diff != "" {
+					t.Fatalf("tool %s mismatch (-want +got):\n%s", expected.Name, diff)
 				}
 				break
 			}
