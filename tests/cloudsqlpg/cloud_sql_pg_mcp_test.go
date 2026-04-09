@@ -104,6 +104,7 @@ func initCloudSQLPgConnectionPool(ctx context.Context, project, region, instance
 }
 
 func TestCloudSQLPgListTools(t *testing.T) {
+	getCloudSQLPgVars(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
