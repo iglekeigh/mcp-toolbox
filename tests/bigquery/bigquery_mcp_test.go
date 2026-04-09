@@ -287,7 +287,11 @@ func invokeMCPToolForTest(t *testing.T, info ToolTestInfo) (string, bool) {
 				return errMsg, true
 			}
 		}
-		t.Fatalf("expected error result containing %q but got success or non-matching error. Status: %d, Result.IsError: %v, Error: %+v", info.Want, statusCode, mcpResp.Result.IsError, mcpResp.Error)
+		var errorMsg string
+		if mcpResp != nil && mcpResp.Error != nil {
+			errorMsg = mcpResp.Error.Message
+		}
+		t.Fatalf("expected error result containing %q but got success or non-matching error. Status: %d, Result.IsError: %v, Error: %+v, ErrorMsg: %q", info.Want, statusCode, mcpResp.Result.IsError, mcpResp.Error, errorMsg)
 		return got, false
 	}
 
@@ -397,8 +401,16 @@ func runBigQueryDataTypeTestsMCP(t *testing.T) {
 			return
 		}
 
-		if info.Want != "" && !strings.Contains(got, info.Want) {
-			t.Fatalf("unexpected result: got %s, want to contain %s", got, info.Want)
+		wantCore := info.Want
+		var wantObj map[string]string
+		if json.Unmarshal([]byte(info.Want), &wantObj) == nil {
+			if errMsg, ok := wantObj["error"]; ok {
+				wantCore = errMsg
+			}
+		}
+
+		if info.Want != "" && !strings.Contains(got, wantCore) {
+			t.Fatalf("unexpected result: got %s, want to contain %s", got, wantCore)
 		}
 	})
 }
@@ -535,14 +547,14 @@ func TestBigQueryToolWithDatasetRestrictionMCP(t *testing.T) {
 	}
 	defer cleanup()
 
-	go func() {
-		_, _ = io.Copy(io.Discard, cmd.Out)
-	}()
-
 	// Wait for server to be ready
 	waitCtx, cancelReady := context.WithTimeout(ctx, 10*time.Second)
 	defer cancelReady()
 	out, err := testutils.WaitForString(waitCtx, regexp.MustCompile(`Server ready to serve`), cmd.Out)
+
+	go func() {
+		_, _ = io.Copy(io.Discard, cmd.Out)
+	}()
 	if err != nil {
 		t.Logf("toolbox command logs: \n%s", out)
 		t.Fatalf("toolbox didn't start successfully: %s", err)
@@ -765,13 +777,13 @@ func TestBigQueryWriteModeAllowedMCP(t *testing.T) {
 	}
 	defer cleanup()
 
-	go func() {
-		_, _ = io.Copy(io.Discard, cmd.Out)
-	}()
-
 	waitCtx, cancelReady := context.WithTimeout(ctx, 10*time.Second)
 	defer cancelReady()
 	_, err = testutils.WaitForString(waitCtx, regexp.MustCompile(`Server ready to serve`), cmd.Out)
+
+	go func() {
+		_, _ = io.Copy(io.Discard, cmd.Out)
+	}()
 	if err != nil {
 		t.Fatalf("toolbox didn't start successfully: %s", err)
 	}
@@ -844,13 +856,13 @@ func TestBigQueryWriteModeBlockedMCP(t *testing.T) {
 	}
 	defer cleanup()
 
-	go func() {
-		_, _ = io.Copy(io.Discard, cmd.Out)
-	}()
-
 	waitCtx, cancelReady := context.WithTimeout(ctx, 10*time.Second)
 	defer cancelReady()
 	_, err = testutils.WaitForString(waitCtx, regexp.MustCompile(`Server ready to serve`), cmd.Out)
+
+	go func() {
+		_, _ = io.Copy(io.Discard, cmd.Out)
+	}()
 	if err != nil {
 		t.Fatalf("toolbox didn't start successfully: %s", err)
 	}
@@ -968,13 +980,13 @@ func TestBigQueryWriteModeProtectedMCP(t *testing.T) {
 	}
 	defer cleanup()
 
-	go func() {
-		_, _ = io.Copy(io.Discard, cmd.Out)
-	}()
-
 	waitCtx, cancelReady := context.WithTimeout(ctx, 10*time.Second)
 	defer cancelReady()
 	_, err = testutils.WaitForString(waitCtx, regexp.MustCompile(`Server ready to serve`), cmd.Out)
+
+	go func() {
+		_, _ = io.Copy(io.Discard, cmd.Out)
+	}()
 	if err != nil {
 		t.Fatalf("toolbox didn't start successfully: %s", err)
 	}
