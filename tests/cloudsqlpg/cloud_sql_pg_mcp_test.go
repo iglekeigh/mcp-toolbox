@@ -14,6 +14,9 @@
 
 package cloudsqlpg
 
+// TODO: We may want to add tests for custom tools defined in cloud-sql-postgres.yaml
+// in the future, rather than just testing the prebuilt tools.
+
 import (
 	"context"
 	"fmt"
