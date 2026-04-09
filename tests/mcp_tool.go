@@ -876,7 +876,7 @@ func RunMCPPostgresListTriggersTest(t *testing.T, ctx context.Context, pool *pgx
 			if mcpResp.Result.IsError {
 				t.Fatalf("list_triggers returned error result: %v", mcpResp.Result)
 			}
-			var gotObj []map[string]any
+			gotObj := []map[string]any{}
 			for _, content := range mcpResp.Result.Content {
 				got := content.Text
 				if got == "null" {
