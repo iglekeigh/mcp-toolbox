@@ -21,6 +21,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -1128,4 +1129,25 @@ func CleanupBigtableTables(t *testing.T, ctx context.Context, adminClient *bigta
 			}
 		}
 	}
+}
+
+// buildPostgresURL constructs a postgres connection URL.
+func buildPostgresURL(host, port, user, pass, dbname string) *url.URL {
+	return &url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(user, pass),
+		Host:   fmt.Sprintf("%s:%s", host, port),
+		Path:   dbname,
+	}
+}
+
+// InitPostgresConnectionPool initializes a connection pool for Postgres.
+func InitPostgresConnectionPool(host, port, user, pass, dbname string) (*pgxpool.Pool, error) {
+	url := buildPostgresURL(host, port, user, pass, dbname)
+	pool, err := pgxpool.New(context.Background(), url.String())
+	if err != nil {
+		return nil, fmt.Errorf("unable to create connection pool: %w", err)
+	}
+
+	return pool, nil
 }

@@ -16,12 +16,14 @@ package tests
 
 import (
 	"bytes"
+
+	"github.com/google/go-cmp/cmp"
+
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -143,47 +145,30 @@ func InvokeMCPTool(t *testing.T, toolName string, arguments map[string]any, requ
 	return resp.StatusCode, &mcpResp, nil
 }
 
-// getMCPResultText safely extracts the text from content blocks, reconstructing a valid JSON array if there are multiple items.
+// getMCPResultText safely extracts the text from content blocks, unmarshaling them if they are valid JSON.
 //
-// TODO: This helper and unmarshalMCPResult rely on extracting text content.
-// For tests that need to strictly validate the exact schema or structure of the output,
-// consider avoiding these helpers and instead unmarshal the raw JSON directly into expected Go structs for comparison.
-func getMCPResultText(t *testing.T, resp *MCPCallToolResponse) string {
+// TODO: For tests that need to strictly validate the exact schema or structure of the output,
+// consider avoiding this helper and instead unmarshal the raw JSON directly into expected Go structs for comparison.
+func getMCPResultText(t *testing.T, resp *MCPCallToolResponse) []any {
 	if len(resp.Result.Content) == 0 {
-		return "[]"
-	}
-	if len(resp.Result.Content) == 1 {
-		return resp.Result.Content[0].Text
+		return []any{}
 	}
 
-	var combined []any
+	var res []any
 	for _, content := range resp.Result.Content {
 		var item any
 		if err := json.Unmarshal([]byte(content.Text), &item); err != nil {
-			combined = append(combined, content.Text)
+			res = append(res, content.Text)
 		} else {
-			combined = append(combined, item)
+			if slice, ok := item.([]any); ok {
+				res = append(res, slice...)
+			} else {
+				res = append(res, item)
+			}
 		}
-	}
 
-	respBytes, err := json.Marshal(combined)
-	if err != nil {
-		t.Fatalf("failed to marshal combined result: %v", err)
 	}
-	return string(respBytes)
-}
-
-// unmarshalMCPResult unmarshals a JSON string into a slice of Ts.
-func unmarshalMCPResult[T any](data string) ([]T, error) {
-	var list []T
-	if err := json.Unmarshal([]byte(data), &list); err == nil {
-		return list, nil
-	}
-	var obj T
-	if err := json.Unmarshal([]byte(data), &obj); err != nil {
-		return nil, err
-	}
-	return []T{obj}, nil
+	return res
 }
 
 // GetMCPToolsList is a JSON-RPC harness that fetches the tools/list registry.
@@ -302,9 +287,12 @@ func RunMCPCustomToolCallMethod(t *testing.T, toolName string, arguments map[str
 		t.Fatalf("%s returned error result: %v", toolName, mcpResp.Result)
 	}
 	got := getMCPResultText(t, mcpResp)
-	if !strings.Contains(got, want) {
-		t.Fatalf(`expected %q to contain %q`, got, want)
+	gotBytes, _ := json.Marshal(got)
+	gotStr := string(gotBytes)
+	if !strings.Contains(gotStr, want) {
+		t.Fatalf(`expected %q to contain %q`, gotStr, want)
 	}
+
 }
 
 // RunMCPToolInvokeTest runs the tool invoke test cases over MCP protocol.
@@ -400,32 +388,14 @@ func RunMCPToolInvokeTest(t *testing.T, select1Want string, options ...InvokeTes
 				t.Fatalf("%s returned error result: %v", tc.toolName, mcpResp.Result)
 			}
 			got := getMCPResultText(t, mcpResp)
-			if !strings.Contains(got, tc.wantResult) {
-				t.Fatalf(`expected %q to contain %q`, got, tc.wantResult)
+			gotBytes, _ := json.Marshal(got)
+			gotStr := string(gotBytes)
+			if !strings.Contains(gotStr, tc.wantResult) {
+				t.Fatalf(`expected %q to contain %q`, gotStr, tc.wantResult)
 			}
+
 		})
 	}
-}
-
-// buildPostgresURL constructs a postgres connection URL.
-func buildPostgresURL(host, port, user, pass, dbname string) *url.URL {
-	return &url.URL{
-		Scheme: "postgres",
-		User:   url.UserPassword(user, pass),
-		Host:   fmt.Sprintf("%s:%s", host, port),
-		Path:   dbname,
-	}
-}
-
-// InitPostgresConnectionPool initializes a connection pool for Postgres.
-func InitPostgresConnectionPool(host, port, user, pass, dbname string) (*pgxpool.Pool, error) {
-	url := buildPostgresURL(host, port, user, pass, dbname)
-	pool, err := pgxpool.New(context.Background(), url.String())
-	if err != nil {
-		return nil, fmt.Errorf("unable to create connection pool: %w", err)
-	}
-
-	return pool, nil
 }
 
 // setUpPostgresViews creates a test view and returns a cleanup function.
@@ -486,19 +456,16 @@ func RunMCPPostgresListViewsTest(t *testing.T, ctx context.Context, pool *pgxpoo
 			}
 
 			got := getMCPResultText(t, mcpResp)
-			gotObj, err := unmarshalMCPResult[map[string]any](got)
-			if err != nil {
-				t.Fatalf("failed to unmarshal nested result string: %v", err)
-			}
 
-			var wantObj []map[string]any
+			var wantObj []any
 			if err := json.Unmarshal([]byte(tc.want), &wantObj); err != nil {
 				t.Fatalf("failed to unmarshal want string: %v", err)
 			}
 
-			if !reflect.DeepEqual(gotObj, wantObj) {
-				t.Errorf("Unexpected result: got  %v, want: %v", gotObj, wantObj)
+			if diff := cmp.Diff(wantObj, got); diff != "" {
+				t.Errorf("Unexpected result mismatch (-want +got):\n%s", diff)
 			}
+
 		})
 	}
 }
@@ -569,22 +536,19 @@ func RunMCPPostgresListSchemasTest(t *testing.T, ctx context.Context, pool *pgxp
 			if mcpResp.Result.IsError {
 				t.Fatalf("list_schemas returned error result: %v", mcpResp.Result)
 			}
-			gotObj := []map[string]any{}
-			got := getMCPResultText(t, mcpResp)
-			if got != "null" {
-				gotObj, err = unmarshalMCPResult[map[string]any](got)
-				if err != nil {
-					t.Fatalf("failed to unmarshal nested result string: %v", err)
-				}
-			}
+			gotObj := getMCPResultText(t, mcpResp)
 
 			if tc.compareSubset {
 				found := false
-				for _, resultSchema := range gotObj {
+				for _, resultSchemaObj := range gotObj {
+					resultSchema, ok := resultSchemaObj.(map[string]any)
+					if !ok {
+						continue
+					}
 					if resultSchema["schema_name"] == wantSchema["schema_name"] {
 						found = true
-						if !reflect.DeepEqual(wantSchema, resultSchema) {
-							t.Errorf("Mismatch in fields for the expected schema: got %v, want %v", resultSchema, wantSchema)
+						if diff := cmp.Diff(wantSchema, resultSchema); diff != "" {
+							t.Errorf("Mismatch in fields for the expected schema (-want +got):\n%s", diff)
 						}
 						break
 					}
@@ -593,10 +557,15 @@ func RunMCPPostgresListSchemasTest(t *testing.T, ctx context.Context, pool *pgxp
 					t.Errorf("Expected schema '%+v' not found in the list of all schemas.", wantSchema)
 				}
 			} else {
-				if !reflect.DeepEqual(tc.want, gotObj) {
-					t.Errorf("Unexpected result: got  %v, want: %v", gotObj, tc.want)
+				var wantObj []any
+				for _, item := range tc.want {
+					wantObj = append(wantObj, item)
+				}
+				if diff := cmp.Diff(wantObj, gotObj); diff != "" {
+					t.Errorf("Unexpected result mismatch (-want +got):\n%s", diff)
 				}
 			}
+
 		})
 	}
 }
@@ -684,11 +653,12 @@ func RunMCPPostgresListActiveQueriesTest(t *testing.T, ctx context.Context, pool
 				t.Fatalf("list_active_queries returned error result: %v", mcpResp.Result)
 			}
 			var details []queryListDetails
-			got := getMCPResultText(t, mcpResp)
-			if got != "null" {
-				details, err = unmarshalMCPResult[queryListDetails](got)
-				if err != nil {
-					t.Fatalf("failed to unmarshal nested result string: %v", err)
+			gotObj := getMCPResultText(t, mcpResp)
+			for _, item := range gotObj {
+				if m, ok := item.(map[string]any); ok {
+					if q, ok := m["query"].(string); ok {
+						details = append(details, queryListDetails{Query: q})
+					}
 				}
 			}
 
@@ -876,22 +846,15 @@ func RunMCPPostgresListTriggersTest(t *testing.T, ctx context.Context, pool *pgx
 			if mcpResp.Result.IsError {
 				t.Fatalf("list_triggers returned error result: %v", mcpResp.Result)
 			}
-			gotObj := []map[string]any{}
-			for _, content := range mcpResp.Result.Content {
-				got := content.Text
-				if got == "null" {
-					continue
-				}
-				items, err := unmarshalMCPResult[map[string]any](got)
-				if err != nil {
-					t.Fatalf("failed to unmarshal nested result string: %v", err)
-				}
-				gotObj = append(gotObj, items...)
-			}
+			gotObj := getMCPResultText(t, mcpResp)
 
 			if tc.compareSubset {
 				found := false
-				for _, resultTrigger := range gotObj {
+				for _, resultTriggerObj := range gotObj {
+					resultTrigger, ok := resultTriggerObj.(map[string]any)
+					if !ok {
+						continue
+					}
 					if resultTrigger["trigger_name"] == wantTrigger["trigger_name"] {
 						found = true
 						if resultTrigger["schema_name"] != wantTrigger["schema_name"] ||
@@ -906,10 +869,15 @@ func RunMCPPostgresListTriggersTest(t *testing.T, ctx context.Context, pool *pgx
 					t.Errorf("Expected trigger '%+v' not found in the list. Got: %+v", wantTrigger, gotObj)
 				}
 			} else {
-				if !reflect.DeepEqual(tc.want, gotObj) {
-					t.Errorf("Unexpected result: got  %v, want: %v", gotObj, tc.want)
+				var wantObj []any
+				for _, item := range tc.want {
+					wantObj = append(wantObj, item)
+				}
+				if diff := cmp.Diff(wantObj, gotObj); diff != "" {
+					t.Errorf("Unexpected result mismatch (-want +got):\n%s", diff)
 				}
 			}
+
 		})
 	}
 }
@@ -982,18 +950,15 @@ func RunMCPPostgresListSequencesTest(t *testing.T, ctx context.Context, pool *pg
 			if mcpResp.Result.IsError {
 				t.Fatalf("list_sequences returned error result: %v", mcpResp.Result)
 			}
-			gotObj := []map[string]any{}
-			got := getMCPResultText(t, mcpResp)
-			if got != "null" {
-				gotObj, err = unmarshalMCPResult[map[string]any](got)
-				if err != nil {
-					t.Fatalf("failed to unmarshal nested result string: %v", err)
-				}
+			gotObj := getMCPResultText(t, mcpResp)
+			var wantObj []any
+			for _, item := range tc.want {
+				wantObj = append(wantObj, item)
+			}
+			if diff := cmp.Diff(wantObj, gotObj); diff != "" {
+				t.Errorf("Unexpected result mismatch (-want +got):\n%s", diff)
 			}
 
-			if !reflect.DeepEqual(tc.want, gotObj) {
-				t.Errorf("Unexpected result: got  %v, want: %v", gotObj, tc.want)
-			}
 		})
 	}
 }
@@ -1119,23 +1084,16 @@ func RunMCPPostgresListIndexesTest(t *testing.T, ctx context.Context, pool *pgxp
 			if mcpResp.Result.IsError {
 				t.Fatalf("list_indexes returned error result: %v", mcpResp.Result)
 			}
-			gotObj := []map[string]any{}
-			for _, content := range mcpResp.Result.Content {
-				got := content.Text
-				t.Logf("list_indexes got: %s", got)
-				if got != "null" {
-					items, err := unmarshalMCPResult[map[string]any](got)
-					if err != nil {
-						t.Fatalf("failed to unmarshal nested result string: %v", err)
-					}
-					gotObj = append(gotObj, items...)
-				}
-			}
+			gotObj := getMCPResultText(t, mcpResp)
 
 			if tc.compareSubset {
 				for _, wantIdx := range tc.want {
 					found := false
-					for _, gotIdx := range gotObj {
+					for _, gotIdxObj := range gotObj {
+						gotIdx, ok := gotIdxObj.(map[string]any)
+						if !ok {
+							continue
+						}
 						if gotIdx["index_name"] == wantIdx["index_name"] {
 							found = true
 							if gotIdx["schema_name"] != wantIdx["schema_name"] ||
@@ -1152,10 +1110,15 @@ func RunMCPPostgresListIndexesTest(t *testing.T, ctx context.Context, pool *pgxp
 					}
 				}
 			} else {
-				if !reflect.DeepEqual(tc.want, gotObj) {
-					t.Errorf("Unexpected result: got  %v, want: %v", gotObj, tc.want)
+				var wantObj []any
+				for _, item := range tc.want {
+					wantObj = append(wantObj, item)
+				}
+				if diff := cmp.Diff(wantObj, gotObj); diff != "" {
+					t.Errorf("Unexpected result mismatch (-want +got):\n%s", diff)
 				}
 			}
+
 		})
 	}
 }
@@ -1312,10 +1275,20 @@ func RunMCPPostgresListStoredProcedureTest(t *testing.T, ctx context.Context, po
 			}
 			var gotObj []storedProcedureDetails
 			got := getMCPResultText(t, mcpResp)
-			if got != "null" {
-				gotObj, err = unmarshalMCPResult[storedProcedureDetails](got)
-				if err != nil {
-					t.Fatalf("failed to unmarshal nested result string: %v", err)
+			for _, item := range got {
+				if m, ok := item.(map[string]any); ok {
+					proc := storedProcedureDetails{}
+					if s, ok := m["schema_name"].(string); ok {
+						proc.SchemaName = s
+					}
+					if p, ok := m["name"].(string); ok {
+						proc.Name = p
+					}
+					if r, ok := m["owner"].(string); ok {
+						proc.Owner = r
+					}
+
+					gotObj = append(gotObj, proc)
 				}
 			}
 
@@ -1348,24 +1321,17 @@ func RunMCPPostgresDatabaseOverviewTest(t *testing.T, ctx context.Context, pool 
 	if mcpResp.Result.IsError {
 		t.Fatalf("database_overview returned error result: %v", mcpResp.Result)
 	}
-	if len(mcpResp.Result.Content) == 0 {
-		t.Fatalf("database_overview returned empty content field")
-	}
-	got := mcpResp.Result.Content[0].Text
-
-	var gotObj []map[string]any
-	if got != "null" {
-		gotObj, err = unmarshalMCPResult[map[string]any](got)
-		if err != nil {
-			t.Fatalf("failed to unmarshal nested result string: %v", err)
-		}
-	}
+	gotObj := getMCPResultText(t, mcpResp)
 
 	if len(gotObj) != 1 {
 		t.Fatalf("Expected exactly one row in the result, got %d", len(gotObj))
 	}
 
-	resultRow := gotObj[0]
+	resultRow, ok := gotObj[0].(map[string]any)
+	if !ok {
+		t.Fatalf("Expected result to be a map, got %T", gotObj[0])
+	}
+
 	expectedKeys := []string{
 		"pg_version",
 		"is_replica",
@@ -1423,22 +1389,12 @@ func RunMCPPostgresListLocksTest(t *testing.T, ctx context.Context, pool *pgxpoo
 	if mcpResp.Result.IsError {
 		t.Fatalf("list_locks returned error result: %v", mcpResp.Result)
 	}
-	if len(mcpResp.Result.Content) == 0 {
-		t.Fatalf("list_locks returned empty content field")
-	}
-	got := mcpResp.Result.Content[0].Text
-
-	var gotObj []map[string]any
-	if got != "null" {
-		gotObj, err = unmarshalMCPResult[map[string]any](got)
-		if err != nil {
-			t.Fatalf("failed to unmarshal nested result string: %v", err)
-		}
-	}
+	gotObj := getMCPResultText(t, mcpResp)
 
 	if len(gotObj) == 0 {
 		t.Errorf("Expected to find locks, got none")
 	}
+
 }
 
 // RunMCPPostgresLongRunningTransactionsTest tests the long_running_transactions tool via MCP.
@@ -1562,15 +1518,7 @@ func RunMCPPostgresGetColumnCardinalityTest(t *testing.T, ctx context.Context, p
 				t.Logf("DEBUG: get_column_cardinality returned empty content as expected for non-existent table")
 				return
 			}
-			got := mcpResp.Result.Content[0].Text
-
-			var gotObj []map[string]any
-			if got != "null" {
-				gotObj, err = unmarshalMCPResult[map[string]any](got)
-				if err != nil {
-					t.Fatalf("failed to unmarshal nested result string: %v", err)
-				}
-			}
+			gotObj := getMCPResultText(t, mcpResp)
 
 			if tc.shouldHaveData {
 				if len(gotObj) == 0 {
@@ -1722,17 +1670,7 @@ func RunMCPPostgresListTableStatsTest(t *testing.T, ctx context.Context, pool *p
 				t.Fatalf("list_table_stats returned error result: %v", mcpResp.Result)
 			}
 
-			var gotObj []map[string]any
-			for _, content := range mcpResp.Result.Content {
-				got := content.Text
-				if got != "null" {
-					items, err := unmarshalMCPResult[map[string]any](got)
-					if err != nil {
-						t.Fatalf("failed to unmarshal nested result string: %v", err)
-					}
-					gotObj = append(gotObj, items...)
-				}
-			}
+			gotObj := getMCPResultText(t, mcpResp)
 
 			// Verify expected data presence
 			if tc.shouldHaveData {
@@ -1742,7 +1680,11 @@ func RunMCPPostgresListTableStatsTest(t *testing.T, ctx context.Context, pool *p
 
 				// Verify the test table is in results
 				found := false
-				for _, row := range gotObj {
+				for _, rowObj := range gotObj {
+					row, ok := rowObj.(map[string]any)
+					if !ok {
+						continue
+					}
 					if row["table_name"] == testTableName {
 						found = true
 						// Verify expected fields are present
@@ -1758,6 +1700,7 @@ func RunMCPPostgresListTableStatsTest(t *testing.T, ctx context.Context, pool *p
 						if row["live_rows"] == nil {
 							t.Errorf("live_rows should not be null")
 						}
+
 						break
 					}
 				}
@@ -1832,26 +1775,20 @@ func RunMCPPostgresListPublicationTablesTest(t *testing.T, ctx context.Context, 
 	if mcpResp.Result.IsError {
 		t.Fatalf("list_publication_tables returned error result: %v", mcpResp.Result)
 	}
-	if len(mcpResp.Result.Content) == 0 {
-		t.Fatalf("list_publication_tables returned empty content field")
-	}
-	got := mcpResp.Result.Content[0].Text
-
-	var gotObj []map[string]any
-	if got != "null" {
-		gotObj, err = unmarshalMCPResult[map[string]any](got)
-		if err != nil {
-			t.Fatalf("failed to unmarshal nested result string: %v", err)
-		}
-	}
+	gotObj := getMCPResultText(t, mcpResp)
 
 	found := false
-	for _, row := range gotObj {
+	for _, rowObj := range gotObj {
+		row, ok := rowObj.(map[string]any)
+		if !ok {
+			continue
+		}
 		if row["publication_name"] == pub1Name && row["table_name"] == table1Name {
 			found = true
 			break
 		}
 	}
+
 	if !found {
 		t.Errorf("Expected to find publication %s for table %s", pub1Name, table1Name)
 	}
@@ -1913,26 +1850,21 @@ func RunMCPPostgresListPgSettingsTest(t *testing.T, ctx context.Context, pool *p
 	if mcpResp.Result.IsError {
 		t.Fatalf("list_pg_settings returned error result: %v", mcpResp.Result)
 	}
-	if len(mcpResp.Result.Content) == 0 {
-		t.Fatalf("list_pg_settings returned empty content field")
-	}
-	got := mcpResp.Result.Content[0].Text
-
-	var gotObj []map[string]any
-	if got != "null" {
-		gotObj, err = unmarshalMCPResult[map[string]any](got)
-		if err != nil {
-			t.Fatalf("failed to unmarshal nested result string: %v", err)
-		}
-	}
+	gotObj := getMCPResultText(t, mcpResp)
 
 	if len(gotObj) != 1 {
 		t.Fatalf("Expected exactly one row in the result, got %d", len(gotObj))
 	}
 
-	if !reflect.DeepEqual(expectedObject, gotObj[0]) {
-		t.Errorf("Unexpected result: got  %v, want: %v", gotObj[0], expectedObject)
+	resultRow, ok := gotObj[0].(map[string]any)
+	if !ok {
+		t.Fatalf("Expected result to be a map, got %T", gotObj[0])
 	}
+
+	if diff := cmp.Diff(expectedObject, resultRow); diff != "" {
+		t.Errorf("Unexpected result mismatch (-want +got):\n%s", diff)
+	}
+
 }
 
 // setUpDatabase creates a database and a role, and returns a cleanup function.
@@ -1974,26 +1906,20 @@ func RunMCPPostgresListDatabaseStatsTest(t *testing.T, ctx context.Context, pool
 	if mcpResp.Result.IsError {
 		t.Fatalf("list_database_stats returned error result: %v", mcpResp.Result)
 	}
-	if len(mcpResp.Result.Content) == 0 {
-		t.Fatalf("list_database_stats returned empty content field")
-	}
-	got := mcpResp.Result.Content[0].Text
-
-	var gotObj []map[string]any
-	if got != "null" {
-		gotObj, err = unmarshalMCPResult[map[string]any](got)
-		if err != nil {
-			t.Fatalf("failed to unmarshal nested result string: %v", err)
-		}
-	}
+	gotObj := getMCPResultText(t, mcpResp)
 
 	found := false
-	for _, row := range gotObj {
+	for _, rowObj := range gotObj {
+		row, ok := rowObj.(map[string]any)
+		if !ok {
+			continue
+		}
 		if row["database_name"] == dbName1 {
 			found = true
 			break
 		}
 	}
+
 	if !found {
 		t.Errorf("Expected to find stats for database %s", dbName1)
 	}
@@ -2054,26 +1980,20 @@ func RunMCPPostgresListRolesTest(t *testing.T, ctx context.Context, pool *pgxpoo
 	if mcpResp.Result.IsError {
 		t.Fatalf("list_roles returned error result: %v", mcpResp.Result)
 	}
-	if len(mcpResp.Result.Content) == 0 {
-		t.Fatalf("list_roles returned empty content field")
-	}
-	got := mcpResp.Result.Content[0].Text
-
-	var gotObj []map[string]any
-	if got != "null" {
-		gotObj, err = unmarshalMCPResult[map[string]any](got)
-		if err != nil {
-			t.Fatalf("failed to unmarshal nested result string: %v", err)
-		}
-	}
+	gotObj := getMCPResultText(t, mcpResp)
 
 	found := false
-	for _, row := range gotObj {
+	for _, rowObj := range gotObj {
+		row, ok := rowObj.(map[string]any)
+		if !ok {
+			continue
+		}
 		if row["role_name"] == adminUser {
 			found = true
 			break
 		}
 	}
+
 	if !found {
 		t.Errorf("Expected to find role %s", adminUser)
 	}
