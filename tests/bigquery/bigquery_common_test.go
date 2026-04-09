@@ -22,8 +22,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/googleapis/genai-toolbox/internal/sources"
-	"github.com/googleapis/genai-toolbox/tests"
+	"github.com/googleapis/mcp-toolbox/internal/sources"
+	"github.com/googleapis/mcp-toolbox/tests"
 )
 
 type ToolTestInfo struct {
