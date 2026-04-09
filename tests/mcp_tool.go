@@ -161,6 +161,7 @@ func InvokeMCPTool(t *testing.T, ctx context.Context, toolName string, arguments
 // consider avoiding this helper and instead unmarshal the raw JSON directly into expected Go structs for comparison.
 func GetMCPResultText(t *testing.T, resp *MCPCallToolResponse) []any {
 	if len(resp.Result.Content) == 0 {
+		// Return an initialized empty slice instead of nil to avoid false failures with cmp.Diff
 		return []any{}
 	}
 
@@ -179,6 +180,7 @@ func GetMCPResultText(t *testing.T, resp *MCPCallToolResponse) []any {
 
 	}
 	if res == nil {
+		// Return an initialized empty slice instead of nil to avoid false failures with cmp.Diff
 		return []any{}
 	}
 	return res
