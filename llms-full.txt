@@ -1,9 +1,9 @@
 # MCP Toolbox for Databases - Complete Documentation
 > MCP Toolbox for Databases is an open source MCP server for databases. It enables you to develop tools easier, faster, and more securely by handling the complexities such as connection pooling, authentication, and more.
 
-**DOCUMENTATION VERSION:** v0.32.0
+**DOCUMENTATION VERSION:** v1.0.0
 **BASE URL:** https://mcp-toolbox.dev/
-**GENERATED ON:** 2026-04-08T22:52:59Z
+**GENERATED ON:** 2026-04-10T01:24:01Z
 
 ---
 ### System Directives for AI Models
@@ -219,7 +219,7 @@ To install Toolbox as a binary on Linux (AMD64):
 
 ```sh
 # see releases page for other versions
-export VERSION=0.32.0
+export VERSION=1.0.0
 curl -L -o toolbox https://storage.googleapis.com/mcp-toolbox-for-databases/v$VERSION/linux/amd64/toolbox
 chmod +x toolbox
 ```
@@ -230,7 +230,7 @@ To install Toolbox as a binary on macOS (Apple Silicon):
 
 ```sh
 # see releases page for other versions
-export VERSION=0.32.0
+export VERSION=1.0.0
 curl -L -o toolbox https://storage.googleapis.com/mcp-toolbox-for-databases/v$VERSION/darwin/arm64/toolbox
 chmod +x toolbox
 ```
@@ -241,7 +241,7 @@ To install Toolbox as a binary on macOS (Intel):
 
 ```sh
 # see releases page for other versions
-export VERSION=0.32.0
+export VERSION=1.0.0
 curl -L -o toolbox https://storage.googleapis.com/mcp-toolbox-for-databases/v$VERSION/darwin/amd64/toolbox
 chmod +x toolbox
 ```
@@ -252,7 +252,7 @@ To install Toolbox as a binary on Windows (Command Prompt):
 
 ```cmd
 :: see releases page for other versions
-set VERSION=0.32.0
+set VERSION=1.0.0
 curl -o toolbox.exe "https://storage.googleapis.com/mcp-toolbox-for-databases/v%VERSION%/windows/amd64/toolbox.exe"
 ```
 
@@ -262,7 +262,7 @@ To install Toolbox as a binary on Windows (PowerShell):
 
 ```powershell
 # see releases page for other versions
-$VERSION = "0.32.0"
+$VERSION = "1.0.0"
 curl.exe -o toolbox.exe "https://storage.googleapis.com/mcp-toolbox-for-databases/v$VERSION/windows/amd64/toolbox.exe"
 ```
 
@@ -274,7 +274,7 @@ You can also install Toolbox as a container:
 
 ```sh
 # see releases page for other versions
-export VERSION=0.32.0
+export VERSION=1.0.0
 docker pull us-central1-docker.pkg.dev/database-toolbox/toolbox/toolbox:$VERSION
 ```
 
@@ -293,7 +293,7 @@ To install from source, ensure you have the latest version of
 [Go installed](https://go.dev/doc/install), and then run the following command:
 
 ```sh
-go install github.com/googleapis/mcp-toolbox@v0.32.0
+go install github.com/googleapis/mcp-toolbox@v1.0.0
 ```
 
 {{% /tab %}}
@@ -1043,7 +1043,7 @@ In this section, we will download Toolbox, configure our tools in a
     <!-- {x-release-please-start-version} -->
     ```bash
     export OS="linux/amd64" # one of linux/amd64, darwin/arm64, darwin/amd64, or windows/amd64
-    curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/$OS/toolbox
+    curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/$OS/toolbox
     ```
     <!-- {x-release-please-end} -->
 
@@ -2176,26 +2176,33 @@ your client ID or the intended audience for the token), the
 `authorizationServer` of your identity provider, and optionally a list of
 `scopesRequired` that must be present in the token's claims.
 
-## Behavior
+## Usage Modes
 
-### Token Validation
+The Generic Auth Service supports two distinct modes of operation:
 
-When a request is received, the service will:
+### 1. Toolbox Auth
 
-1. Extract the token from the `<name>_token` header (e.g.,
-   `my-generic-auth_token`).
-2. Fetch the JWKS from the configured `authorizationServer` (caching it in the
-   background) to verify the token's signature.
-3. Validate that the token is not expired and its signature is valid.
-4. Verify that the `aud` (audience) claim matches the configured `audience`.
-   claim contains all required scopes.
-5. Return the validated claims to be used for [Authenticated
-   Parameters][auth-params] or [Authorized Invocations][auth-invoke].
+This mode is used for Toolbox's native authentication/authorization features. It
+is active when you reference the auth service in a tool's configuration and
+`mcpEnabled` is set to false.
 
-[auth-invoke]: ../tools/_index.md#authorized-invocations
-[auth-params]: ../tools/_index.md#authenticated-parameters
+- **Header**: Expects the token in a custom header matching `<name>_token`
+  (e.g., `my-generic-auth_token`).
+- **Token Type**: Only supports **JWT** (OIDC) tokens.
+- **Usage**: Used for [Authenticated Parameters][auth-params] and [Authorized
+  Invocations][auth-invoke].
 
-## Example
+#### Token Validation
+
+When a request is received in this mode, the service will:
+
+1. Extract the token from the `<name>_token` header.
+2. Treat it as a JWT (opaque tokens are not supported in this mode).
+3. Validates signature using JWKS fetched from `authorizationServer`.
+4. Verifies expiration (`exp`) and audience (`aud`).
+5. Verifies required scopes in `scope` claim.
+
+#### Example
 
 ```yaml
 kind: authServices
@@ -2203,7 +2210,72 @@ name: my-generic-auth
 type: generic
 audience: ${YOUR_OIDC_AUDIENCE}
 authorizationServer: https://your-idp.example.com
-mcpEnabled: false
+# mcpEnabled: false
+scopesRequired:
+  - read
+  - write
+```
+
+#### Tool Usage Example
+
+To use this auth service for **Authenticated Parameters** or **Authorized
+Invocations**, reference it in your tool configuration:
+
+```yaml
+kind: tool
+name: secure_query
+type: postgres-sql
+source: my-pg-instance
+statement: |
+  SELECT * FROM data WHERE user_id = $1
+parameters:
+  - name: user_id
+    type: strings
+    description: Auto-populated from token
+    authServices:
+      - name: my-generic-auth
+        field: sub # Extract 'sub' claim from JWT
+authRequired:
+  - my-generic-auth # Require valid token for invocation
+```
+
+### 2. MCP Authorization
+
+This mode enforces global authentication for all MCP endpoints. It is active
+when `mcpEnabled` is set to `true` in the auth service configuration.
+
+- **Header**: Expects the token in the standard `Authorization: Bearer <token>`
+  header.
+- **Token Type**: Supports both **JWT** and **Opaque** tokens.
+- **Usage**: Used to secure the entire MCP server.
+
+#### Token Validation
+
+When a request is received in this mode, the service will:
+
+1. Extract the token from the `Authorization` header after `Bearer ` prefix.
+2. Determine if the token is a JWT or an opaque token based on format (JWTs
+   contain exactly two dots).
+3. For **JWTs**:
+   - Validates signature using JWKS fetched from `authorizationServer`.
+   - Verifies expiration (`exp`) and audience (`aud`).
+   - Verifies required scopes in `scope` claim.
+4. For **Opaque Tokens**:
+   - Calls the introspection endpoint (as listed in the `authorizationServer`'s
+     OIDC configuration).
+   - Verifies that the token is `active`.
+   - Verifies expiration (`exp`) and audience (`aud`).
+   - Verifies required scopes in `scope` field.
+
+#### Example
+
+```yaml
+kind: authServices
+name: my-generic-auth
+type: generic
+audience: ${YOUR_TOKEN_AUDIENCE}
+authorizationServer: https://your-idp.example.com
+mcpEnabled: true
 scopesRequired:
   - read
   - write
@@ -2212,6 +2284,11 @@ scopesRequired:
 {{< notice tip >}} Use environment variable replacement with the format
 ${ENV_NAME} instead of hardcoding your secrets into the configuration file.
 {{< /notice >}}
+
+[auth-invoke]: ../tools/_index.md#authorized-invocations
+[auth-params]: ../tools/_index.md#authenticated-parameters
+[mcp-auth]:
+  https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
 
 ## Reference
 
@@ -9686,19 +9763,19 @@ After you install Looker in the MCP Store, resources and tools from the server a
 
 {{< tabpane persist=header >}}
 {{< tab header="linux/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/linux/amd64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/linux/amd64/toolbox
 {{< /tab >}}
 
 {{< tab header="darwin/arm64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/darwin/arm64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/darwin/arm64/toolbox
 {{< /tab >}}
 
 {{< tab header="darwin/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/darwin/amd64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/darwin/amd64/toolbox
 {{< /tab >}}
 
 {{< tab header="windows/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/windows/amd64/toolbox.exe
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/windows/amd64/toolbox.exe
 {{< /tab >}}
 {{< /tabpane >}}
     <!-- {x-release-please-end} -->
@@ -10128,7 +10205,11 @@ as well as get the database schema needed to write LookML effectively.
 1. **get_lookml_tests**: Retrieves a list of available LookML tests for a project.
 1. **run_lookml_tests**: Executes specific LookML tests within a project.
 1. **create_view_from_table**: Generates boilerplate LookML views directly from the database schema.
-1. **project_git_branch**: Fetch and manipulate the git branch of a LookML project.
+1. **list_git_branches**: List the available git branches of a LookML project.
+1. **get_git_branch**: Get the current git branch of a LookML project.
+1. **create_git_branch**: Create a new git branch for a LookML project.
+1. **switch_git_branch**: Switch the git branch of a LookML project.
+1. **delete_git_branch**: Delete a git branch of a LookML project.
 
 {{< notice note >}}
 Prebuilt tools are pre-1.0, so expect some tool changes between versions. LLMs
@@ -10184,19 +10265,19 @@ expose your developer assistant tools to a MySQL instance:
    <!-- {x-release-please-start-version} -->
    {{< tabpane persist=header >}}
 {{< tab header="linux/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/linux/amd64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/linux/amd64/toolbox
 {{< /tab >}}
 
 {{< tab header="darwin/arm64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/darwin/arm64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/darwin/arm64/toolbox
 {{< /tab >}}
 
 {{< tab header="darwin/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/darwin/amd64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/darwin/amd64/toolbox
 {{< /tab >}}
 
 {{< tab header="windows/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/windows/amd64/toolbox.exe
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/windows/amd64/toolbox.exe
 {{< /tab >}}
 {{< /tabpane >}}
     <!-- {x-release-please-end} -->
@@ -10510,19 +10591,19 @@ expose your developer assistant tools to a Neo4j instance:
    <!-- {x-release-please-start-version} -->
    {{< tabpane persist=header >}}
 {{< tab header="linux/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/linux/amd64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/linux/amd64/toolbox
 {{< /tab >}}
 
 {{< tab header="darwin/arm64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/darwin/arm64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/darwin/arm64/toolbox
 {{< /tab >}}
 
 {{< tab header="darwin/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/darwin/amd64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/darwin/amd64/toolbox
 {{< /tab >}}
 
 {{< tab header="windows/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/windows/amd64/toolbox.exe
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/windows/amd64/toolbox.exe
 {{< /tab >}}
 {{< /tabpane >}}
     <!-- {x-release-please-end} -->
@@ -10833,19 +10914,19 @@ to expose your developer assistant tools to an Oracle instance:
    <!-- {x-release-please-start-version} -->
    {{< tabpane persist=header >}}
 {{< tab header="linux/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/linux/amd64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/linux/amd64/toolbox
 {{< /tab >}}
 
 {{< tab header="darwin/arm64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/darwin/arm64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/darwin/arm64/toolbox
 {{< /tab >}}
 
 {{< tab header="darwin/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/darwin/amd64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/darwin/amd64/toolbox
 {{< /tab >}}
 
 {{< tab header="windows/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/windows/amd64/toolbox.exe
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/windows/amd64/toolbox.exe
 {{< /tab >}}
 {{< /tabpane >}}
     <!-- {x-release-please-end} -->
@@ -11178,19 +11259,19 @@ Omni](https://cloud.google.com/alloydb/omni/docs/overview).
    <!-- {x-release-please-start-version} -->
    {{< tabpane persist=header >}}
 {{< tab header="linux/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/linux/amd64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/linux/amd64/toolbox
 {{< /tab >}}
 
 {{< tab header="darwin/arm64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/darwin/arm64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/darwin/arm64/toolbox
 {{< /tab >}}
 
 {{< tab header="darwin/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/darwin/amd64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/darwin/amd64/toolbox
 {{< /tab >}}
 
 {{< tab header="windows/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/windows/amd64/toolbox.exe
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/windows/amd64/toolbox.exe
 {{< /tab >}}
 {{< /tabpane >}}
     <!-- {x-release-please-end} -->
@@ -11531,19 +11612,19 @@ instance:
    <!-- {x-release-please-start-version} -->
    {{< tabpane persist=header >}}
 {{< tab header="linux/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/linux/amd64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/linux/amd64/toolbox
 {{< /tab >}}
 
 {{< tab header="darwin/arm64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/darwin/arm64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/darwin/arm64/toolbox
 {{< /tab >}}
 
 {{< tab header="darwin/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/darwin/amd64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/darwin/amd64/toolbox
 {{< /tab >}}
 
 {{< tab header="windows/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/windows/amd64/toolbox.exe
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/windows/amd64/toolbox.exe
 {{< /tab >}}
 {{< /tabpane >}}
     <!-- {x-release-please-end} -->
@@ -11857,19 +11938,19 @@ to expose your developer assistant tools to a SQLite instance:
    <!-- {x-release-please-start-version} -->
    {{< tabpane persist=header >}}
 {{< tab header="linux/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/linux/amd64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/linux/amd64/toolbox
 {{< /tab >}}
 
 {{< tab header="darwin/arm64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/darwin/arm64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/darwin/arm64/toolbox
 {{< /tab >}}
 
 {{< tab header="darwin/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/darwin/amd64/toolbox
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/darwin/amd64/toolbox
 {{< /tab >}}
 
 {{< tab header="windows/amd64" lang="bash" >}}
-curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v0.32.0/windows/amd64/toolbox.exe
+curl -O https://storage.googleapis.com/mcp-toolbox-for-databases/v1.0.0/windows/amd64/toolbox.exe
 {{< /tab >}}
 {{< /tabpane >}}
     <!-- {x-release-please-end} -->
@@ -16606,18 +16687,18 @@ The behavior of this tool is influenced by the `writeMode` setting on its
 
 BigQuery uses [GoogleSQL][bigquery-googlesql] for querying data. The integration
 with Toolbox supports this dialect. The specified SQL statement is executed, and
-parameters can be inserted into the query. BigQuery supports both named parameters
-(e.g., `@name`) and positional parameters (`?`), but they cannot be mixed in the
-same query.
+parameters can be inserted into the query. BigQuery supports both named
+parameters (e.g., `@name`) and positional parameters (`?`), but they cannot be
+mixed in the same query.
 
 [bigquery-googlesql]:
-    https://cloud.google.com/bigquery/docs/reference/standard-sql/
+  https://cloud.google.com/bigquery/docs/reference/standard-sql/
 
 ## Example
 
-> **Note:** This tool uses [parameterized
-> queries](https://cloud.google.com/bigquery/docs/parameterized-queries) to
-> prevent SQL injections. Query parameters can be used as substitutes for
+> **Note:** This tool uses
+> [parameterized queries](https://cloud.google.com/bigquery/docs/parameterized-queries)
+> to prevent SQL injections. Query parameters can be used as substitutes for
 > arbitrary expressions. Parameters cannot be used as substitutes for
 > identifiers, column names, table names, or other parts of the query.
 
@@ -16654,13 +16735,93 @@ parameters:
     description: Email address of the user
 ```
 
+### Example with Vector Search
+
+BigQuery supports vector similarity search using the `ML.DISTANCE` function.
+When using an embeddingModel with a `bigquery-sql` tool, the tool automatically
+converts text parameters into the native ARRAY<FLOAT64> format required by
+BigQuery.
+
+#### Define the Embedding Model
+
+See
+[EmbeddingModels](../../../documentation/configuration/embedding-models/_index.md)
+for more information.
+
+```yaml
+kind: embeddingModel
+name: gemini-model
+type: gemini
+model: gemini-embedding-001
+apiKey: ${GOOGLE_API_KEY}
+dimension: 768
+```
+
+#### Vector Ingestion Tool
+
+This tool stores both the raw text and its vector representation. It uses
+`valueFromParam` to hide the vector conversion logic from the LLM, ensuring the
+Agent only has to provide the content once.
+
+```yaml
+kind: tool
+name: insert_doc
+type: bigquery-sql
+source: my-bigquery-source
+statement: |
+  INSERT INTO `my-project.my-dataset.vector_table` (id, content, embedding)
+  VALUES (1, @content, @text_to_embed)
+description: |
+  Internal tool to index new documents for future search.
+parameters:
+  - name: content
+    type: string
+    description: The text content to store.
+  - name: text_to_embed
+    type: string
+    # Automatically copies 'content' and converts it to a FLOAT64 array
+    valueFromParam: content
+    embeddedBy: gemini-model
+```
+
+#### Vector Search Tool
+
+This tool allows the Agent to perform a natural language search. The query
+string provided by the Agent is converted into a vector before the SQL is
+executed.
+
+```yaml
+kind: tool
+name: search_docs
+type: bigquery-sql
+source: my-bigquery-source
+statement: |
+  SELECT 
+    id, 
+    content, 
+    ML.DISTANCE(embedding, @query, 'COSINE') AS distance 
+  FROM 
+    `my-project.my-dataset.vector_table` 
+  ORDER BY 
+    distance 
+  LIMIT 1
+description: |
+  Search for documents using natural language. 
+  Returns the most semantically similar result.
+parameters:
+  - name: query
+    type: string
+    description: The search terms or question.
+    embeddedBy: gemini-model
+```
+
 ### Example with Template Parameters
 
 > **Note:** This tool allows direct modifications to the SQL statement,
 > including identifiers, column names, and table names. **This makes it more
 > vulnerable to SQL injections**. Using basic parameters only (see above) is
 > recommended for performance and safety reasons. For more details, please check
-> [templateParameters](../#template-parameters).
+> [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters).
 
 ```yaml
 kind: tool
@@ -16683,14 +16844,15 @@ templateParameters:
 
 ## Reference
 
-| **field**          |                   **type**                    | **required** | **description**                                                                                                                         |
-|--------------------|:---------------------------------------------:|:------------:|-----------------------------------------------------------------------------------------------------------------------------------------|
-| type               |                    string                     |     true     | Must be "bigquery-sql".                                                                                                                 |
-| source             |                    string                     |     true     | Name of the source the GoogleSQL should execute on.                                                                                     |
-| description        |                    string                     |     true     | Description of the tool that is passed to the LLM.                                                                                      |
-| statement          |                    string                     |     true     | The GoogleSQL statement to execute.                                                                                                     |
-| parameters         |    [parameters](../#specifying-parameters)    |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the SQL statement.                                           |
-| templateParameters | [templateParameters](../#template-parameters) |    false     | List of [templateParameters](../#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+| **field**          |                                            **type**                                            | **required** | **description**                                                                                                                                                                          |
+| ------------------ | :--------------------------------------------------------------------------------------------: | :----------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| type               |                                             string                                             |     true     | Must be "bigquery-sql".                                                                                                                                                                  |
+| source             |                                             string                                             |     true     | Name of the source the GoogleSQL should execute on.                                                                                                                                      |
+| description        |                                             string                                             |     true     | Description of the tool that is passed to the LLM.                                                                                                                                       |
+| statement          |                                             string                                             |     true     | The GoogleSQL statement to execute.                                                                                                                                                      |
+| parameters         |    [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)    |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the SQL statement.                                           |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+
 
 
 
@@ -17929,7 +18091,7 @@ parameters:
 > including identifiers, column names, and table names. **This makes it more
 > vulnerable to SQL injections**. Using basic parameters only (see above) is
 > recommended for performance and safety reasons. For more details, please check
-> [templateParameters](..#template-parameters).
+> [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters).
 
 ```yaml
 kind: tool
@@ -17958,8 +18120,8 @@ templateParameters:
 | source             |                    string                    |     true     | Name of the source the SQL should execute on.                                                                                          |
 | description        |                    string                    |     true     | Description of the tool that is passed to the LLM.                                                                                     |
 | statement          |                    string                    |     true     | SQL statement to execute on.                                                                                                           |
-| parameters         |   [parameters](../#specifying-parameters)    |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the SQL statement.                                          |
-| templateParameters | [templateParameters](..#template-parameters) |    false     | List of [templateParameters](..#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+| parameters         |   [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)    |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the SQL statement.                                          |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
 
 ## Advanced Usage
 
@@ -18128,7 +18290,7 @@ parameters:
 > including keyspaces, table names, and column names. **This makes it more
 > vulnerable to CQL injections**. Using basic parameters only (see above) is
 > recommended for performance and safety reasons. For more details, please check
-> [templateParameters](../#template-parameters).
+> [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters).
 
 ```yaml
 kind: tool
@@ -18162,8 +18324,8 @@ templateParameters:
 | description        |                    string                     |     true     | Description of the tool that is passed to the LLM.                                                                                      |
 | statement          |                    string                     |     true     | CQL statement to execute.                                                                                                               |
 | authRequired       |                   []string                    |    false     | List of authentication requirements for the source.                                                                                     |
-| parameters         |    [parameters](../#specifying-parameters)    |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the CQL statement.                                           |
-| templateParameters | [templateParameters](../#template-parameters) |    false     | List of [templateParameters](../#template-parameters) that will be inserted into the CQL statement before executing prepared statement. |
+| parameters         |    [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)    |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the CQL statement.                                           |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the CQL statement before executing prepared statement. |
 
 
 
@@ -20380,8 +20542,9 @@ description: "Creates an exact copy of a Cloud SQL instance at a specific point 
 
 ## Additional Resources
 - [Cloud SQL Admin API documentation](https://cloud.google.com/sql/docs/mysql/admin-api)
-- [Toolbox Cloud SQL tools documentation](_index.md)
+- [Toolbox Cloud SQL tools documentation](../source.md)
 - [Cloud SQL Clone API documentation](https://cloud.google.com/sql/docs/mysql/clone-instance)
+
 
 
 
@@ -20431,8 +20594,9 @@ description: "Creates a backup on the given Cloud SQL instance."
 
 ## Additional Resources
 - [Cloud SQL Admin API documentation](https://cloud.google.com/sql/docs/mysql/admin-api)
-- [Toolbox Cloud SQL tools documentation](_index.md)
+- [Toolbox Cloud SQL tools documentation](../source.md)
 - [Cloud SQL Backup API documentation](https://cloud.google.com/sql/docs/mysql/backup-recovery/backups)
+
 
 
 
@@ -20715,7 +20879,7 @@ description: "Restores a backup onto the given Cloud SQL instance."
 
 ## Additional Resources
 - [Cloud SQL Admin API documentation](https://cloud.google.com/sql/docs/mysql/admin-api)
-- [Toolbox Cloud SQL tools documentation](_index.md)
+- [Toolbox Cloud SQL tools documentation](../source.md)
 - [Cloud SQL Restore API documentation](https://cloud.google.com/sql/docs/mysql/backup-recovery/restoring)
 
 
@@ -21174,6 +21338,7 @@ instead of hardcoding your secrets into the configuration file.
     *   `list_tables_missing_unique_indexes`: Looks for tables that do not have
         primary or unique key contraint.
     *   `list_table_fragmentation`: Displays table fragmentation in MySQL.
+    *   `list_table_stats`: Displays table statistics in MySQL.
 
 
 
@@ -22025,7 +22190,7 @@ This tool is ideal for:
 - Debugging and troubleshooting
 - Schema inspection
 
-For production use cases, use [cockroachdb-sql](_index.md) with parameterized queries.
+For production use cases, use [cockroachdb-sql](./cockroachdb-sql.md) with parameterized queries.
 
 #### Be Cautious with Data Modification
 
@@ -22141,10 +22306,10 @@ The tool will return descriptive errors for:
 
 ## Additional Resources
 
-- [cockroachdb-sql](_index.md) - For parameterized, production-ready queries
+- [cockroachdb-sql](./cockroachdb-sql.md) - For parameterized, production-ready queries
 - [cockroachdb-list-tables](./cockroachdb-list-tables.md) - List tables in the database
 - [cockroachdb-list-schemas](./cockroachdb-list-schemas.md) - List database schemas
-- [CockroachDB Source](_index.md) - Source configuration reference
+- [CockroachDB Source](../source.md) - Source configuration reference
 - [CockroachDB SQL Reference](https://www.cockroachlabs.com/docs/stable/sql-statements.html) - Official SQL documentation
 
 
@@ -22458,10 +22623,10 @@ The tool handles common errors:
 
 ## Additional Resources
 
-- [cockroachdb-sql](_index.md) - Execute parameterized queries
+- [cockroachdb-sql](./cockroachdb-sql.md) - Execute parameterized queries
 - [cockroachdb-execute-sql](./cockroachdb-execute-sql.md) - Execute ad-hoc SQL
 - [cockroachdb-list-tables](./cockroachdb-list-tables.md) - List tables in the database
-- [CockroachDB Source](_index.md) - Source configuration reference
+- [CockroachDB Source](../source.md) - Source configuration reference
 - [CockroachDB Schema Design](https://www.cockroachlabs.com/docs/stable/schema-design-overview.html) - Official documentation
 
 
@@ -22814,10 +22979,10 @@ The tool handles common errors:
 
 ## Additional Resources
 
-- [cockroachdb-sql](_index.md) - Execute parameterized queries
+- [cockroachdb-sql](./cockroachdb-sql.md) - Execute parameterized queries
 - [cockroachdb-execute-sql](./cockroachdb-execute-sql.md) - Execute ad-hoc SQL
 - [cockroachdb-list-schemas](./cockroachdb-list-schemas.md) - List database schemas
-- [CockroachDB Source](_index.md) - Source configuration reference
+- [CockroachDB Source](../source.md) - Source configuration reference
 - [CockroachDB Schema Design](https://www.cockroachlabs.com/docs/stable/schema-design-overview.html) - Best practices
 
 
@@ -23117,7 +23282,7 @@ The tool automatically handles:
 - [cockroachdb-execute-sql](./cockroachdb-execute-sql.md) - For ad-hoc SQL execution
 - [cockroachdb-list-tables](./cockroachdb-list-tables.md) - List tables in the database
 - [cockroachdb-list-schemas](./cockroachdb-list-schemas.md) - List database schemas
-- [CockroachDB Source](_index.md) - Source configuration reference
+- [CockroachDB Source](../source.md) - Source configuration reference
 
 
 
@@ -23273,7 +23438,7 @@ parameters:
 > including identifiers, column names, and table names. **This makes it more
 > vulnerable to SQL injections**. Using basic parameters only (see above) is
 > recommended for performance and safety reasons. For more details, please check
-> [templateParameters](..#template-parameters).
+> [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters).
 
 ```yaml
 kind: tool
@@ -23302,8 +23467,8 @@ templateParameters:
 | source             |                    string                    |     true     | Name of the source the SQL query should execute on.                                                                                    |
 | description        |                    string                    |     true     | Description of the tool that is passed to the LLM.                                                                                     |
 | statement          |                    string                    |     true     | SQL statement to execute                                                                                                               |
-| parameters         |   [parameters](../#specifying-parameters)    |    false     | List of [parameters](../#specifying-parameters) that will be used with the SQL statement.                                              |
-| templateParameters | [templateParameters](..#template-parameters) |    false     | List of [templateParameters](..#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+| parameters         |   [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)    |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be used with the SQL statement.                                              |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
 | authRequired       |                array[string]                 |    false     | List of auth services that are required to use this tool.                                                                              |
 
 
@@ -24765,7 +24930,7 @@ parameters:
 | statement   |                 string                  |     true     | dql statement to execute                                                                  |
 | isQuery     |                 boolean                 |    false     | To run statement as query set true otherwise false                                        |
 | timeout     |                 string                  |    false     | To set timeout for query                                                                  |
-| parameters  | [parameters](../#specifying-parameters) |    false     | List of [parameters](../#specifying-parameters) that will be used with the dql statement. |
+| parameters  | [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be used with the dql statement. |
 
 
 
@@ -24888,22 +25053,13 @@ Execute ES|QL queries.
 This tool allows you to execute ES|QL queries against your Elasticsearch
 cluster. You can use this to perform complex searches and aggregations.
 
-See the [official
-documentation](https://www.elastic.co/docs/reference/query-languages/esql/esql-getting-started)
+See the
+[official documentation](https://www.elastic.co/docs/reference/query-languages/esql/esql-getting-started)
 for more information.
 
 ## Compatible Sources
 
 {{< compatible-sources >}}
-
-## Parameters
-
-| **name**   |                **type**                 | **required** | **description**                                                                                                                                     |
-|------------|:---------------------------------------:|:------------:|-----------------------------------------------------------------------------------------------------------------------------------------------------|
-| query      |                 string                  |    false     | The ES\|QL query to run. Can also be passed by parameters.                                                                                          |
-| format     |                 string                  |    false     | The format of the query. Default is json. Valid values are csv, json, tsv, txt, yaml, cbor, smile, or arrow.                                        |
-| timeout    |                 integer                 |    false     | The timeout for the query in seconds. Default is 60 (1 minute).                                                                                     |
-| parameters | [parameters](../#specifying-parameters) |    false     | List of [parameters](../#specifying-parameters) that will be used with the ES\|QL query.<br/>Only supports “string”, “integer”, “float”, “boolean”. |
 
 ## Example
 
@@ -24923,6 +25079,70 @@ parameters:
     description: Limit the number of results.
     required: true
 ```
+
+## Reference
+
+| **field**  |                **type**                 | **required** | **description**                                                                                                                                     |
+| ---------- | :-------------------------------------: | :----------: | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| query      |                 string                  |    false     | The ES\|QL query to run. Can also be passed by parameters.                                                                                          |
+| format     |                 string                  |    false     | The format of the query. Default is json. Valid values are `csv`, `json`, `tsv`, `txt`, `yaml`, `cbor`, `smile`, or `arrow`.                        |
+| timeout    |                 integer                 |    false     | The timeout for the query in seconds. Default is 60 (1 minute).                                                                                     |
+| parameters | [parameters](../#specifying-parameters) |    false     | List of [parameters](../#specifying-parameters) that will be used with the ES\|QL query.<br/>Only supports “string”, “integer”, “float”, “boolean”. |
+
+
+
+
+========================================================================
+## elasticsearch-execute-esql
+========================================================================
+**Hierarchy:** MCP Toolbox for Databases > Integrations > Elasticsearch > Tools > elasticsearch-execute-esql
+**URL:** https://mcp-toolbox.dev/integrations/elasticsearch/tools/elasticsearch-execute-esql/
+**Description:** Execute arbitrary ES|QL statements.
+
+
+
+## About
+
+Execute arbitrary ES|QL statements.
+
+This tool allows you to execute arbitrary ES|QL statements against your
+Elasticsearch cluster at runtime. This is useful for ad-hoc queries where the
+statement is not known beforehand.
+
+See the
+[official documentation](https://www.elastic.co/docs/reference/query-languages/esql/esql-getting-started)
+for more information.
+
+## Compatible Sources
+
+{{< compatible-sources >}}
+
+## Parameters
+
+| **name** | **type** | **required** | **description**                  |
+| -------- | :------: | :----------: | -------------------------------- |
+| query    |  string  |     true     | The ES|QL statement to execute. |
+
+## Example
+
+```yaml
+kind: tool
+name: execute_ad_hoc_esql
+type: elasticsearch-execute-esql
+source: elasticsearch-source
+description: Use this tool to execute arbitrary ES|QL statements.
+format: json
+```
+
+## Reference
+
+| **field**   |                  **type**                  | **required** | **description**                                                                                  |
+|-------------|:------------------------------------------:|:------------:|--------------------------------------------------------------------------------------------------|
+| type        |                   string                   |     true     | Must be "elasticsearch-execute-esql".                                                            |
+| source      |                   string                   |     true     | Name of the source the ES|QL should execute on.                                                   |
+| description |                   string                   |     true     | Description of the tool that is passed to the LLM.                                               |
+| format      |                   string                   |     false    | The format of the query. Default is json. Valid values are `csv`, `json`, `tsv`, `txt`, `yaml`, `cbor`, `smile`, or `arrow`. |
+
 
 
 
@@ -25195,7 +25415,7 @@ parameters:
 > including identifiers, column names, and table names. **This makes it more
 > vulnerable to SQL injections**. Using basic parameters only (see above) is
 > recommended for performance and safety reasons. For more details, please check
-> [templateParameters](../#template-parameters).
+> [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters).
 
 ```yaml
 kind: tool
@@ -25224,8 +25444,8 @@ templateParameters:
 | source             |                    string                     |     true     | Name of the source the SQL should execute on.                                                                                           |
 | description        |                    string                     |     true     | Description of the tool that is passed to the LLM.                                                                                      |
 | statement          |                    string                     |     true     | SQL statement to execute on.                                                                                                            |
-| parameters         |    [parameters](../#specifying-parameters)    |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the SQL statement.                                           |
-| templateParameters | [templateParameters](../#template-parameters) |    false     | List of [templateParameters](../#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+| parameters         |    [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)    |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the SQL statement.                                           |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
 
 
 
@@ -26251,7 +26471,7 @@ curl -X POST http://localhost:5000/api/tool/your-tool-name/invoke \
 
 - [firestore-query-collection](firestore-query-collection.md) -
   Non-parameterizable query tool
-- [Firestore Source Configuration](_index.md)
+- [Firestore Source Configuration](../source.md)
 - [Firestore Query
   Documentation](https://firebase.google.com/docs/firestore/query-data/queries)
 
@@ -27801,9 +28021,9 @@ headerParams:
 | method       |                 string                  |     true     | The HTTP method to use (e.g., GET, POST, PUT, DELETE).                                                                                                                                                                     |
 | headers      |            map[string]string            |    false     | A map of headers to include in the HTTP request (overrides source headers).                                                                                                                                                |
 | requestBody  |                 string                  |    false     | The request body payload. Use [go template][go-template-doc] with the parameter name as the placeholder (e.g., `{{.id}}` will be replaced with the value of the parameter that has name `id` in the `bodyParams` section). |
-| queryParams  | [parameters](../#specifying-parameters) |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the query string.                                                                                                                               |
-| bodyParams   | [parameters](../#specifying-parameters) |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the request body payload.                                                                                                                       |
-| headerParams | [parameters](../#specifying-parameters) |    false     | List of [parameters](../#specifying-parameters) that will be inserted as the request headers.                                                                                                                              |
+| queryParams  | [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the query string.                                                                                                                               |
+| bodyParams   | [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the request body payload.                                                                                                                       |
+| headerParams | [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted as the request headers.                                                                                                                              |
 
 [go-template-doc]: <https://pkg.go.dev/text/template#pkg-overview>
 
@@ -27947,6 +28167,197 @@ instead of hardcoding your secrets into the configuration file.
 **URL:** https://mcp-toolbox.dev/integrations/looker/tools/
 **Description:** None
 
+
+
+
+
+========================================================================
+## Create Git Branch Tool
+========================================================================
+**Hierarchy:** MCP Toolbox for Databases > Integrations > Looker > Tools > Create Git Branch Tool
+**URL:** https://mcp-toolbox.dev/integrations/looker/tools/looker-create-git-branch/
+**Description:** A "looker-create-git-branch" tool is used to create a new git branch for a LookML project.
+
+
+
+## About
+
+A `looker-create-git-branch` tool is used to create a new git branch
+for a LookML project.
+
+## Compatible Sources
+
+{{< compatible-sources >}}
+
+## Parameters
+
+| **field**  | **type** | **required** | **description**                           |
+| ---------- | :------: | :----------: | ----------------------------------------- |
+| project_id |  string  |     true     | The unique ID of the LookML project.      |
+| branch     |  string  |     true     | The git branch to create.                 |
+| ref        |  string  |     false    | The ref to use as the start of a new branch. Defaults to HEAD of current branch. |
+
+## Example
+
+```yaml
+kind: tool
+name: create_project_git_branch
+type: looker-create-git-branch
+source: looker-source
+description: |
+  This tool is used to create a new git branch of a LookML
+  project. This only works in dev mode.
+```
+
+## Reference
+
+| **field**   | **type** | **required** | **description**                                    |
+|-------------|:--------:|:------------:|----------------------------------------------------|
+| type        |  string  |     true     | Must be "looker-create-git-branch".                |
+| source      |  string  |     true     | Name of the source.                                |
+| description |  string  |     true     | Description of the tool that is passed to the LLM. |
+
+
+
+
+========================================================================
+## Delete Git Branch Tool
+========================================================================
+**Hierarchy:** MCP Toolbox for Databases > Integrations > Looker > Tools > Delete Git Branch Tool
+**URL:** https://mcp-toolbox.dev/integrations/looker/tools/looker-delete-git-branch/
+**Description:** A "looker-delete-git-branch" tool is used to delete a git branch of a LookML project.
+
+
+
+## About
+
+A `looker-delete-git-branch` tool is used to delete a git branch
+of a LookML project.
+
+## Compatible Sources
+
+{{< compatible-sources >}}
+
+## Parameters
+
+| **field**  | **type** | **required** | **description**                           |
+| ---------- | :------: | :----------: | ----------------------------------------- |
+| project_id |  string  |     true     | The unique ID of the LookML project.      |
+| branch     |  string  |     true     | The git branch to delete.                 |
+
+## Example
+
+```yaml
+kind: tool
+name: delete_project_git_branch
+type: looker-delete-git-branch
+source: looker-source
+description: |
+  This tool is used to delete a git branch of a LookML
+  project. This only works in dev mode.
+```
+
+## Reference
+
+| **field**   | **type** | **required** | **description**                                    |
+|-------------|:--------:|:------------:|----------------------------------------------------|
+| type        |  string  |     true     | Must be "looker-delete-git-branch".                |
+| source      |  string  |     true     | Name of the source.                                |
+| description |  string  |     true     | Description of the tool that is passed to the LLM. |
+
+
+
+
+========================================================================
+## Get Git Branch Tool
+========================================================================
+**Hierarchy:** MCP Toolbox for Databases > Integrations > Looker > Tools > Get Git Branch Tool
+**URL:** https://mcp-toolbox.dev/integrations/looker/tools/looker-get-git-branch/
+**Description:** A "looker-get-git-branch" tool is used to retrieve the current git branch of a LookML project.
+
+
+
+## About
+
+A `looker-get-git-branch` tool is used to retrieve the current git branch
+of a LookML project.
+
+## Compatible Sources
+
+{{< compatible-sources >}}
+
+## Parameters
+
+| **field**  | **type** | **required** | **description**                           |
+| ---------- | :------: | :----------: | ----------------------------------------- |
+| project_id |  string  |     true     | The unique ID of the LookML project.      |
+
+## Example
+
+```yaml
+kind: tool
+name: get_project_git_branch
+type: looker-get-git-branch
+source: looker-source
+description: |
+  This tool is used to retrieve the current git branch of a LookML
+  project.
+```
+
+## Reference
+
+| **field**   | **type** | **required** | **description**                                    |
+|-------------|:--------:|:------------:|----------------------------------------------------|
+| type        |  string  |     true     | Must be "looker-get-git-branch".                   |
+| source      |  string  |     true     | Name of the source.                                |
+| description |  string  |     true     | Description of the tool that is passed to the LLM. |
+
+
+
+
+========================================================================
+## List Git Branches Tool
+========================================================================
+**Hierarchy:** MCP Toolbox for Databases > Integrations > Looker > Tools > List Git Branches Tool
+**URL:** https://mcp-toolbox.dev/integrations/looker/tools/looker-list-git-branches/
+**Description:** A "looker-list-git-branches" tool is used to retrieve the list of available git branches of a LookML project.
+
+
+
+## About
+
+A `looker-list-git-branches` tool is used to retrieve the list of available git branches
+of a LookML project.
+
+## Compatible Sources
+
+{{< compatible-sources >}}
+
+## Parameters
+
+| **field**  | **type** | **required** | **description**                           |
+| ---------- | :------: | :----------: | ----------------------------------------- |
+| project_id |  string  |     true     | The unique ID of the LookML project.      |
+
+## Example
+
+```yaml
+kind: tool
+name: list_project_git_branches
+type: looker-list-git-branches
+source: looker-source
+description: |
+  This tool is used to retrieve the list of available git branches of a LookML
+  project.
+```
+
+## Reference
+
+| **field**   | **type** | **required** | **description**                                    |
+|-------------|:--------:|:------------:|----------------------------------------------------|
+| type        |  string  |     true     | Must be "looker-list-git-branches".                |
+| source      |  string  |     true     | Name of the source.                                |
+| description |  string  |     true     | Description of the tool that is passed to the LLM. |
 
 
 
@@ -29587,80 +29998,6 @@ description: |
 
 
 ========================================================================
-## looker-git-branch
-========================================================================
-**Hierarchy:** MCP Toolbox for Databases > Integrations > Looker > Tools > looker-git-branch
-**URL:** https://mcp-toolbox.dev/integrations/looker/tools/looker-git-branch/
-**Description:** A "looker-git-branch" tool is used to retrieve and manipulate the git branch of a LookML project.
-
-
-
-## About
-
-A `looker-git-branch` tool is used to retrieve and manipulate the git branch
-of a LookML project.
-
-`looker-git-branch` requires two parameters, the LookML `project_id` and the
-`operation`. The operation must be one of `list`, `get`, `create`, `switch`,
-or `delete`.
-
-The `list` operation retrieves the list of available branches. The `get`
-operation retrieves the current branch.
-
-`create`, `switch` and `delete` all require an additional parameter, the
-`branch` name. The `create` operation creates a new branch. The `switch`
-operation switches to the specified branch. The `delete` operation deletes
-the specified branch.
-
-`create` and `switch` can both use an additional `ref` parameter, which is
-the git ref that the branch should be at. If it isn't specified, `create`
-will start with the ref of the current branch. `switch` will start with the
-HEAD of that branch. Specifying `ref` will do the equivalent of `reset --hard`
-on the branch.
-
-## Compatible Sources
-
-{{< compatible-sources >}}
-
-## Example
-```yaml
-kind: tool
-name: project_git_branch
-type: looker-git-branch
-source: looker-source
-description: |
-  This tool is used to retrieve and manipulate the git branch of a LookML
-  project.
-
-  An operation id must be provided which is one of the following:
-  * `list` - List all the available branch names.
-  * `get` - Get the current branch name.
-  * `create` - Create a new branch. The branch is initial set to the current
-  ref, unless ref is specified. This only works in dev mode.
-  * `switch` - Change the branch to the given branch, and update to the given
-  ref if specified. This only works in dev mode.
-  * `delete` - Delete a branch. This only works in dev mode.  
-
-  Parameters:
-  - project_id (required): The unique ID of the LookML project.
-  - operation (required): One of `list`, `get`, `create`, `switch`, or `delete`.
-  - branch (optional): The branch to create, switch to, or delete.
-  - ref (optional): The ref to start a newly created branch, or change a branch
-  with `reset --hard` on a switch operation.
-```
-
-## Reference
-
-| **field**   | **type** | **required** | **description**                                    |
-|-------------|:--------:|:------------:|----------------------------------------------------|
-| type        |  string  |     true     | Must be "looker-git-branch".                       |
-| source      |  string  |     true     | Name of the source the SQL should execute on.      |
-| description |  string  |     true     | Description of the tool that is passed to the LLM. |
-
-
-
-
-========================================================================
 ## looker-health-analyze
 ========================================================================
 **Hierarchy:** MCP Toolbox for Databases > Integrations > Looker > Tools > looker-health-analyze
@@ -30959,6 +31296,55 @@ tools:
 
 
 ========================================================================
+## Switch Git Branch Tool
+========================================================================
+**Hierarchy:** MCP Toolbox for Databases > Integrations > Looker > Tools > Switch Git Branch Tool
+**URL:** https://mcp-toolbox.dev/integrations/looker/tools/looker-switch-git-branch/
+**Description:** A "looker-switch-git-branch" tool is used to switch the git branch of a LookML project.
+
+
+
+## About
+
+A `looker-switch-git-branch` tool is used to switch the git branch
+of a LookML project.
+
+## Compatible Sources
+
+{{< compatible-sources >}}
+
+## Parameters
+
+| **field**  | **type** | **required** | **description**                           |
+| ---------- | :------: | :----------: | ----------------------------------------- |
+| project_id |  string  |     true     | The unique ID of the LookML project.      |
+| branch     |  string  |     true     | The git branch to switch to.              |
+| ref        |  string  |     false    | The ref to switch the branch to using `reset --hard`. |
+
+## Example
+
+```yaml
+kind: tool
+name: switch_project_git_branch
+type: looker-switch-git-branch
+source: looker-source
+description: |
+  This tool is used to switch the git branch of a LookML
+  project. This only works in dev mode.
+```
+
+## Reference
+
+| **field**   | **type** | **required** | **description**                                    |
+|-------------|:--------:|:------------:|----------------------------------------------------|
+| type        |  string  |     true     | Must be "looker-switch-git-branch".                |
+| source      |  string  |     true     | Name of the source.                                |
+| description |  string  |     true     | Description of the tool that is passed to the LLM. |
+
+
+
+
+========================================================================
 ## Samples
 ========================================================================
 **Hierarchy:** MCP Toolbox for Databases > Integrations > Looker > Samples
@@ -31487,7 +31873,11 @@ In this section, we will download Toolbox and run the Toolbox server.
     *   `get_lookml_tests`: Retrieves a list of available LookML tests for a project.
     *   `run_lookml_tests`: Executes specific LookML tests within a project.
     *   `create_view_from_table`: Generates boilerplate LookML views directly from the database schema.
-    *   `project_git_branch`: Fetch and manipulate the git branch of a LookML project.
+    *   `list_git_branches`: List the available git branches of a LookML project.
+    *   `get_git_branch`: Get the current git branch of a LookML project.
+    *   `create_git_branch`: Create a new git branch for a LookML project.
+    *   `switch_git_branch`: Switch the git branch of a LookML project.
+    *   `delete_git_branch`: Delete a git branch of a LookML project.
 
 
 
@@ -32026,7 +32416,7 @@ parameters:
 > including identifiers, column names, and table names. **This makes it more
 > vulnerable to SQL injections**. Using basic parameters only (see above) is
 > recommended for performance and safety reasons. For more details, please check
-> [templateParameters](../#template-parameters).
+> [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters).
 
 ```yaml
 kind: tool
@@ -32115,8 +32505,8 @@ ORDER BY created_at DESC;
 | source             |                   string                         |     true     | Name of the source the SQL should execute on.                                                                                              |
 | description        |                   string                         |     true     | Description of the tool that is passed to the LLM.                                                                                         |
 | statement          |                   string                         |     true     | SQL statement to execute on.                                                                                                               |
-| parameters         | [parameters](../#specifying-parameters)       |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the SQL statement.                                           |
-| templateParameters | [templateParameters](../#template-parameters) |    false     | List of [templateParameters](../#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+| parameters         | [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)       |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the SQL statement.                                           |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
 
 
 
@@ -33153,6 +33543,91 @@ The response is a json array with the following fields:
 
 
 ========================================================================
+## mysql-list-table-stats
+========================================================================
+**Hierarchy:** MCP Toolbox for Databases > Integrations > MySQL > Tools > mysql-list-table-stats
+**URL:** https://mcp-toolbox.dev/integrations/mysql/tools/mysql-list-table-stats/
+**Description:** A "mysql-list-table-stats" tool report table statistics including table size, total latency, rows read, rows written, read and write latency for entire instance, a specified database, or a specified table.
+
+
+
+## About
+
+A `mysql-list-table-stats` tool generates table-level performance and resource consumption statistics to facilitate bottleneck identification and workload analysis.
+
+`mysql-list-table-stats` outputs detailed table-level resource consumption including estimated row counts, table size, a complete breakdown of CRUD activity (rows fetched, inserted, updated, and deleted), and IO statistics such as total, read, write and miscellaneous latency. The output is a JSON formatted array of the top 10 MySQL tables ranked by total latency. 
+
+Below are some use cases for `mysql-list-table-stats`
+- **Finding hottest tables**: Identify tables with highest total latency, read or writes based on the `sort_by` column. 
+- **Finding tables with most reads**: Identify tables with highest reads by sorting on `rows_fetched`. 
+- **Monitoring growth**: Track `row_count` and `size_MB` of table over time to estimate growth."
+
+## Compatible Sources
+
+{{< compatible-sources others="integrations/cloud-sql-mysql">}}
+
+## Requirements
+
+- `performance_schema` should be turned ON for this tool to work. 
+
+## Parameters
+
+This tool takes 4 optional input parameters:
+
+- `table_schema` (optional): The database where table stats check is to be
+  executed. Check all tables visible to the current database if not specified.
+- `table_name` (optional): Name of the table to be checked. Check all tables
+  visible to the current user if not specified.
+- `sort_by` (optional): The column to sort by. Valid values are `row_count`, `rows_fetched`, `rows_inserted`, `rows_updated`, `rows_deleted`, `total_latency_secs` (defaults to `total_latency_secs`)
+- `limit` (optional): Max rows to return, default 10.
+
+## Example
+
+```yaml
+kind: tools
+name: list_table_stats
+type: mysql-list-table-stats
+source: my-mysql-instance
+description: Display table statistics including table size, total latency, rows read, rows written, read and write latency for entire instance, a specified database, or a specified table. Specifying a database name or table name filters the output to that specific db or table. Results are limited to 10 by default.
+```
+
+## Output Format
+ 
+The response is a json array with the following fields:
+```json
+[
+  {
+  "table_schema": "The schema/database this table belongs to",
+  "table_name": "Name of this table",
+  "size_MB": "Size of the table data in MB",
+  "row_count": "Number of rows in the table",
+  "total_latency_secs": "total latency in secs",
+  "rows_fetched": "total number of rows fetched",
+  "rows_inserted": "total number of rows inserted",
+  "rows_updated": "total number of rows updated",
+  "rows_deleted": "total number of rows deleted",
+  "io_reads": "total number of io read requests",
+  "io_read_latency": "io read latency in seconds",
+  "io_write_latency": "io write latency in seconds",
+  "io_misc_latency": "io misc latency in seconds",
+  }
+]
+```
+
+## Reference
+
+| **field**   | **type** | **required** | **description**                                    |
+|-------------|:--------:|:------------:|----------------------------------------------------|
+| type        |  string  |     true     | Must be "mysql-list-table-stats".                  |
+| source      |  string  |     true     | Name of the source the SQL should execute on.      |
+| description |  string  |     true     | Description of the tool that is passed to the LLM. |
+
+
+
+
+
+
+========================================================================
 ## mysql-list-tables
 ========================================================================
 **Hierarchy:** MCP Toolbox for Databases > Integrations > MySQL > Tools > mysql-list-tables
@@ -33335,7 +33810,7 @@ parameters:
 > including identifiers, column names, and table names. **This makes it more
 > vulnerable to SQL injections**. Using basic parameters only (see above) is
 > recommended for performance and safety reasons. For more details, please check
-> [templateParameters](..#template-parameters).
+> [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters).
 
 ```yaml
 kind: tool
@@ -33364,8 +33839,8 @@ templateParameters:
 | source             |                   string                         |     true     | Name of the source the SQL should execute on.                                                                                              |
 | description        |                   string                         |     true     | Description of the tool that is passed to the LLM.                                                                                         |
 | statement          |                   string                         |     true     | SQL statement to execute on.                                                                                                               |
-| parameters         | [parameters](../#specifying-parameters)       |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the SQL statement.                                           |
-| templateParameters | [templateParameters](..#template-parameters) |    false     | List of [templateParameters](..#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+| parameters         | [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)       |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the SQL statement.                                           |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
 
 
 
@@ -33410,6 +33885,7 @@ templateParameters:
     *   `list_tables_missing_unique_indexes`: Looks for tables that do not have
         primary or unique key contraint.
     *   `list_table_fragmentation`: Displays table fragmentation in MySQL.
+    *   `list_table_stats`: Displays table statistics in MySQL.
 
 
 
@@ -33567,6 +34043,71 @@ parameters:
     description: 4 digit number starting in 1900 up to the current year
 ```
 
+### Vector Search
+
+Neo4j supports vector similarity search. When using an `embeddingModel` with a `neo4j-cypher` tool, the tool automatically converts text parameters into the vector format required by Neo4j.
+
+#### Define the Embedding Model
+
+See [EmbeddingModels](../../../documentation/configuration/embedding-models/_index.md) for more information.
+
+kind: embeddingModel
+name: gemini-model
+type: gemini
+model: gemini-embedding-001
+apiKey: ${GOOGLE_API_KEY}
+dimension: 768
+
+#### Vector Ingestion Tool
+
+This tool stores both the raw text and its vector representation. It uses `valueFromParam` to hide the vector conversion logic from the LLM, ensuring the Agent only has to provide the content once.
+```yaml
+kind: tool
+name: insert_doc_neo4j
+type: neo4j-cypher
+source: my-neo4j-source
+statement: |
+  CREATE (n:Document {content: $content, embedding: $text_to_embed})
+  RETURN 1 as result
+description: |
+  Index new documents for semantic search in Neo4j.
+parameters:
+  - name: content
+    type: string
+    description: The text content to store.
+  - name: text_to_embed
+    type: string
+    # Automatically copies 'content' and converts it to a vector array
+    valueFromParam: content
+    embeddedBy: gemini-model
+```
+
+#### Vector Search Tool
+
+This tool allows the Agent to perform a natural language search. The query string provided by the Agent is converted into a vector before the Cypher statement is executed.
+
+```yaml
+kind: tool
+name: search_docs_neo4j
+type: neo4j-cypher
+source: my-neo4j-source
+statement: |
+  MATCH (n:Document)
+  WITH n, vector.similarity.cosine(n.embedding, $query) AS score
+  WHERE score IS NOT NULL
+  ORDER BY score DESC
+  LIMIT 1
+  RETURN n.content as content
+description: |
+  Search for documents in Neo4j using natural language. 
+  Returns the most semantically similar result.
+parameters:
+  - name: query
+    type: string
+    description: The search query to be converted to a vector.
+    embeddedBy: gemini-model
+```
+
 ## Reference
 
 | **field**   |                **type**                 | **required** | **description**                                                                              |
@@ -33575,7 +34116,7 @@ parameters:
 | source      |                 string                  |     true     | Name of the source the Cypher query should execute on.                                       |
 | description |                 string                  |     true     | Description of the tool that is passed to the LLM.                                           |
 | statement   |                 string                  |     true     | Cypher statement to execute                                                                  |
-| parameters  | [parameters](../#specifying-parameters) |    false     | List of [parameters](../#specifying-parameters) that will be used with the Cypher statement. |
+| parameters  | [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be used with the Cypher statement. |
 
 
 
@@ -34189,8 +34730,8 @@ parameters:
 | source             |                    string                    |     true     | Name of the source the SQL should execute on.                                                                                          |
 | description        |                    string                    |     true     | Description of the tool that is passed to the LLM.                                                                                     |
 | statement          |                    string                    |     true     | SQL statement to execute on.                                                                                                           |
-| parameters         |    [parameters](..#specifying-parameters)    |    false     | List of [parameters](..#specifying-parameters) that will be inserted into the SQL statement.                                           |
-| templateParameters | [templateParameters](..#template-parameters) |    false     | List of [templateParameters](..#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+| parameters         |    [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)    |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the SQL statement.                                           |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
 
 
 
@@ -37766,7 +38307,7 @@ parameters:
 > including identifiers, column names, and table names. **This makes it more
 > vulnerable to SQL injections**. Using basic parameters only (see above) is
 > recommended for performance and safety reasons. For more details, please check
-> [templateParameters](..#template-parameters).
+> [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters).
 
 ```yaml
 kind: tool
@@ -37787,6 +38328,75 @@ templateParameters:
     description: Table to select from
 ```
 
+### Example with Vector Search
+
+SingleStore supports vector operations. When using an `embeddingModel` with a `singlestore-sql` tool, the tool automatically converts text parameters into a JSON string array. You can then use SingleStore's `JSON_ARRAY_PACK()` function in your SQL statement to pack this string into a binary vector format (BLOB) for vector storage and similarity search.
+
+#### Define the Embedding Model
+See [EmbeddingModels](../../../documentation/configuration/embedding-models/_index.md) for more information.
+
+```yaml
+kind: embeddingModel
+name: gemini-model
+type: gemini
+model: gemini-embedding-001
+apiKey: ${GOOGLE_API_KEY}
+dimension: 768
+```
+
+#### Vector Ingestion Tool
+This tool stores both the raw text and its vector representation. It uses `valueFromParam` to hide the vector conversion logic from the LLM, ensuring the Agent only has to provide the content once.
+
+```yaml
+kind: tool
+name: insert_doc_singlestore
+type: singlestore-sql
+source: my-s2-source
+statement: |
+  INSERT INTO vector_table (id, content, embedding)
+  VALUES (1, ?, JSON_ARRAY_PACK(?))
+description: |
+  Index new documents for semantic search in SingleStore.
+parameters:
+  - name: content
+    type: string
+    description: The text content to store.
+  - name: text_to_embed
+    type: string
+    # Automatically copies 'content' and converts it to a vector string array
+    valueFromParam: content
+    embeddedBy: gemini-model
+```
+
+#### Vector Search Tool
+This tool allows the Agent to perform a natural language search. The query string provided by the Agent is converted into a vector string array before the SQL is executed.
+
+```yaml
+kind: tool
+name: search_docs_singlestore
+type: singlestore-sql
+source: my-s2-source
+statement: |
+  SELECT 
+    id, 
+    content, 
+    DOT_PRODUCT(embedding, JSON_ARRAY_PACK(?)) AS score 
+  FROM 
+    vector_table 
+  ORDER BY 
+    score DESC
+  LIMIT 1
+description: |
+  Search for documents in SingleStore using natural language. 
+  Returns the most semantically similar result.
+parameters:
+  - name: query
+    type: string
+    description: The search query to be converted to a vector.
+    embeddedBy: gemini-model
+```
+
+
 ## Reference
 
 | **field**          |                   **type**                   | **required** | **description**                                                                                                                        |
@@ -37795,8 +38405,8 @@ templateParameters:
 | source             |                    string                    |     true     | Name of the source the SQL should execute on.                                                                                          |
 | description        |                    string                    |     true     | Description of the tool that is passed to the LLM.                                                                                     |
 | statement          |                    string                    |     true     | SQL statement to execute on.                                                                                                           |
-| parameters         |   [parameters](../#specifying-parameters)    |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the SQL statement.                                          |
-| templateParameters | [templateParameters](..#template-parameters) |    false     | List of [templateParameters](..#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+| parameters         |   [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)    |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the SQL statement.                                          |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
 
 
 
@@ -38041,7 +38651,7 @@ parameters:
 > including identifiers, column names, and table names. **This makes it more
 > vulnerable to SQL injections**. Using basic parameters only (see above) is
 > recommended for performance and safety reasons. For more details, please check
-> [templateParameters](..#template-parameters).
+> [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters).
 
 ```yaml
 kind: tool
@@ -38070,8 +38680,8 @@ templateParameters:
 | source             |                    string                    |     true     | Name of the source the SQL should execute on.                                                                                          |
 | description        |                    string                    |     true     | Description of the tool that is passed to the LLM.                                                                                     |
 | statement          |                    string                    |     true     | SQL statement to execute on.                                                                                                           |
-| parameters         |   [parameters](../#specifying-parameters)    |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the SQL statement.                                          |
-| templateParameters | [templateParameters](..#template-parameters) |    false     | List of [templateParameters](..#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+| parameters         |   [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)    |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the SQL statement.                                          |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
 | authRequired       |                array[string]                 |    false     | List of auth services that are required to use this tool.                                                                              |
 
 
@@ -38568,13 +39178,83 @@ parameters:
 {{< /tab >}}
 {{< /tabpane >}}
 
+
+### Example with Vector Search
+
+Spanner supports high-performance vector similarity search. When using an `embeddingModel` with a `spanner-sql` tool, the tool automatically converts text parameters into the native ARRAY<FLOAT64> format required by Spanner.
+
+#### Define the Embedding Model
+See [EmbeddingModels](../../../documentation/configuration/embedding-models/_index.md) for more information.
+
+```yaml
+kind: embeddingModel
+name: gemini-model
+type: gemini
+model: gemini-embedding-001
+apiKey: ${GOOGLE_API_KEY}
+dimension: 768
+```
+
+#### Vector Ingestion Tool
+This tool stores both the raw text and its vector representation. It uses `valueFromParam` to hide the vector conversion logic from the LLM, ensuring the Agent only has to provide the content once.
+
+```yaml
+kind: tool
+name: insert_doc_spanner
+type: spanner-sql
+source: my-spanner-source
+statement: |
+  INSERT INTO vector_table (id, content, embedding)
+  VALUES (1, @content, @text_to_embed)
+description: |
+  Index new documents for semantic search in Spanner.
+parameters:
+  - name: content
+    type: string
+    description: The text content to store.
+  - name: text_to_embed
+    type: string
+    # Automatically copies 'content' and converts it to a FLOAT64 array
+    valueFromParam: content
+    embeddedBy: gemini-model
+```
+
+#### Vector Search Tool
+This tool allows the Agent to perform a natural language search. The query string provided by the Agent is converted into a vector before the SQL is executed.
+
+```yaml
+kind: tool
+name: search_docs_spanner
+type: spanner-sql
+source: my-spanner-source
+statement: |
+  SELECT 
+    id, 
+    content, 
+    COSINE_DISTANCE(embedding, @query) AS distance 
+  FROM 
+    vector_table 
+  ORDER BY 
+    distance 
+  LIMIT 1
+description: |
+  Search for documents in Spanner using natural language. 
+  Returns the most semantically similar result.
+parameters:
+  - name: query
+    type: string
+    description: The search query to be converted to a vector.
+    embeddedBy: gemini-model
+```
+
+
 ### Example with Template Parameters
 
 > **Note:** This tool allows direct modifications to the SQL statement,
 > including identifiers, column names, and table names. **This makes it more
 > vulnerable to SQL injections**. Using basic parameters only (see above) is
 > recommended for performance and safety reasons. For more details, please check
-> [templateParameters](..#template-parameters).
+> [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters).
 
 ```yaml
 kind: tool
@@ -38603,9 +39283,9 @@ templateParameters:
 | source             |                    string                    |     true     | Name of the source the SQL should execute on.                                                                                          |
 | description        |                    string                    |     true     | Description of the tool that is passed to the LLM.                                                                                     |
 | statement          |                    string                    |     true     | SQL statement to execute on.                                                                                                           |
-| parameters         |   [parameters](../#specifying-parameters)    |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the SQL statement.                                          |
+| parameters         |   [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)    |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the SQL statement.                                          |
 | readOnly           |                     bool                     |    false     | When set to `true`, the `statement` is run as a read-only transaction. Default: `false`.                                               |
-| templateParameters | [templateParameters](..#template-parameters) |    false     | List of [templateParameters](..#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
 
 
 
@@ -39460,7 +40140,7 @@ parameters:
 > including identifiers, column names, and table names. **This makes it more
 > vulnerable to SQL injections**. Using basic parameters only (see above) is
 > recommended for performance and safety reasons. For more details, please check
-> [templateParameters](..#template-parameters).
+> [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters).
 
 ```yaml
 kind: tool
@@ -39489,8 +40169,8 @@ templateParameters:
 | source             |                    string                    |     true     | Name of the source the T-SQL statement should execute on.                                                                              |
 | description        |                    string                    |     true     | Description of the tool that is passed to the LLM.                                                                                     |
 | statement          |                    string                    |     true     | SQL statement to execute.                                                                                                              |
-| parameters         |   [parameters](../#specifying-parameters)    |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the SQL statement.                                          |
-| templateParameters | [templateParameters](..#template-parameters) |    false     | List of [templateParameters](..#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+| parameters         |   [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)    |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the SQL statement.                                          |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
 
 
 
@@ -39735,7 +40415,7 @@ statement: SELECT * FROM users WHERE name LIKE ? AND age >= ?
 > including identifiers, column names, and table names. **This makes it more
 > vulnerable to SQL injections**. Using basic parameters only (see above) is
 > recommended for performance and safety reasons. For more details, please check
-> [templateParameters](..#template-parameters).
+> [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters).
 
 ```yaml
 kind: tool
@@ -39764,8 +40444,8 @@ templateParameters:
 | source             |                    string                    |     true     | Name of the source the SQLite source configuration.                                                                                    |
 | description        |                    string                    |     true     | Description of the tool that is passed to the LLM.                                                                                     |
 | statement          |                    string                    |     true     | The SQL statement to execute.                                                                                                          |
-| parameters         |   [parameters](../#specifying-parameters)    |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the SQL statement.                                          |
-| templateParameters | [templateParameters](..#template-parameters) |    false     | List of [templateParameters](..#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+| parameters         |   [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)    |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the SQL statement.                                          |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
 
 
 
@@ -40044,7 +40724,7 @@ parameters:
 > including identifiers, column names, and table names. **This makes it more
 > vulnerable to SQL injections**. Using basic parameters only (see above) is
 > recommended for performance and safety reasons. For more details, please check
-> [templateParameters](..#template-parameters).
+> [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters).
 
 ```yaml
 kind: tool
@@ -40073,8 +40753,8 @@ templateParameters:
 | source             |                    string                    |     true     | Name of the source the SQL should execute on.                                                                                          |
 | description        |                    string                    |     true     | Description of the tool that is passed to the LLM.                                                                                     |
 | statement          |                    string                    |     true     | SQL statement to execute on.                                                                                                           |
-| parameters         |    [parameters](..#specifying-parameters)    |    false     | List of [parameters](..#specifying-parameters) that will be inserted into the SQL statement.                                           |
-| templateParameters | [templateParameters](..#template-parameters) |    false     | List of [templateParameters](..#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+| parameters         |    [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)    |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the SQL statement.                                           |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
 
 
 
@@ -40289,7 +40969,7 @@ parameters:
 > including identifiers, column names, and table names. **This makes it more
 > vulnerable to SQL injections**. Using basic parameters only (see above) is
 > recommended for performance and safety reasons. For more details, please check
-> [templateParameters](..#template-parameters).
+> [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters).
 
 ```yaml
 kind: tool
@@ -40318,8 +40998,8 @@ templateParameters:
 | source             |                    string                    |     true     | Name of the source the SQL should execute on.                                                                                          |
 | description        |                    string                    |     true     | Description of the tool that is passed to the LLM.                                                                                     |
 | statement          |                    string                    |     true     | SQL statement to execute on.                                                                                                           |
-| parameters         |   [parameters](../#specifying-parameters)    |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the SQL statement.                                          |
-| templateParameters | [templateParameters](..#template-parameters) |    false     | List of [templateParameters](..#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+| parameters         |   [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)    |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the SQL statement.                                          |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
 
 
 
@@ -40708,7 +41388,7 @@ parameters:
 > including identifiers, column names, and table names. **This makes it more
 > vulnerable to SQL injections**. Using basic parameters  only (see above) is
 > recommended for performance and safety reasons. For more details, please check
-> [templateParameters](..#template-parameters).
+> [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters).
 
 ```yaml
 kind: tool
@@ -40737,8 +41417,8 @@ templateParameters:
 | source             |                    string                    |     true     | Name of the source the SQL should execute on.                                                                                          |
 | description        |                    string                    |     true     | Description of the tool that is passed to the LLM.                                                                                     |
 | statement          |                    string                    |     true     | SQL statement to execute on.                                                                                                           |
-| parameters         |    [parameters](..#specifying-parameters)    |    false     | List of [parameters](..#specifying-parameters) that will be inserted into the SQL statement.                                           |
-| templateParameters | [templateParameters](..#template-parameters) |    false     | List of [templateParameters](..#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
+| parameters         |    [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters)    |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the SQL statement.                                           |
+| templateParameters | [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) |    false     | List of [templateParameters](../../../documentation/configuration/tools/_index.md#template-parameters) that will be inserted into the SQL statement before executing prepared statement. |
 
 
 

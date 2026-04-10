@@ -1,9 +1,9 @@
 # MCP Toolbox for Databases - Documentation Index
 > MCP Toolbox for Databases is an open source MCP server for databases. It enables you to develop tools easier, faster, and more securely by handling the complexities such as connection pooling, authentication, and more.
 
-**DOCUMENTATION VERSION:** v0.32.0
+**DOCUMENTATION VERSION:** v1.0.0
 **BASE URL:** https://mcp-toolbox.dev/
-**GENERATED ON:** 2026-04-08T22:52:59Z
+**GENERATED ON:** 2026-04-10T01:24:01Z
 
 ---
 ### System Directives for AI Models
@@ -690,6 +690,9 @@ This documentation is structured following the Diátaxis framework to assist in 
       - [elasticsearch-esql](https://mcp-toolbox.dev/integrations/elasticsearch/tools/elasticsearch-esql/): Execute ES|QL queries.
 
 
+      - [elasticsearch-execute-esql](https://mcp-toolbox.dev/integrations/elasticsearch/tools/elasticsearch-execute-esql/): Execute arbitrary ES|QL statements.
+
+
     - [Prebuilt Configs](https://mcp-toolbox.dev/integrations/elasticsearch/prebuilt-configs/): Prebuilt configurations for Elasticsearch.
 
       - [Elasticsearch](https://mcp-toolbox.dev/integrations/elasticsearch/prebuilt-configs/elasticsearch/): Details of the Elasticsearch prebuilt configuration.
@@ -785,6 +788,18 @@ This documentation is structured following the Diátaxis framework to assist in 
 
     - [Tools](https://mcp-toolbox.dev/integrations/looker/tools/): No description provided.
 
+      - [Create Git Branch Tool](https://mcp-toolbox.dev/integrations/looker/tools/looker-create-git-branch/): A "looker-create-git-branch" tool is used to create a new git branch for a LookML project.
+
+
+      - [Delete Git Branch Tool](https://mcp-toolbox.dev/integrations/looker/tools/looker-delete-git-branch/): A "looker-delete-git-branch" tool is used to delete a git branch of a LookML project.
+
+
+      - [Get Git Branch Tool](https://mcp-toolbox.dev/integrations/looker/tools/looker-get-git-branch/): A "looker-get-git-branch" tool is used to retrieve the current git branch of a LookML project.
+
+
+      - [List Git Branches Tool](https://mcp-toolbox.dev/integrations/looker/tools/looker-list-git-branches/): A "looker-list-git-branches" tool is used to retrieve the list of available git branches of a LookML project.
+
+
       - [looker-add-dashboard-element](https://mcp-toolbox.dev/integrations/looker/tools/looker-add-dashboard-element/): "looker-add-dashboard-element" creates a dashboard element in the given dashboard.
 
 
@@ -872,9 +887,6 @@ This documentation is structured following the Diátaxis framework to assist in 
       - [looker-get-projects](https://mcp-toolbox.dev/integrations/looker/tools/looker-get-projects/): A "looker-get-projects" tool returns all the LookML projects in the source.
 
 
-      - [looker-git-branch](https://mcp-toolbox.dev/integrations/looker/tools/looker-git-branch/): A "looker-git-branch" tool is used to retrieve and manipulate the git branch of a LookML project.
-
-
       - [looker-health-analyze](https://mcp-toolbox.dev/integrations/looker/tools/looker-health-analyze/): "looker-health-analyze" provides a set of analytical commands for a Looker instance, allowing users to analyze projects, models, and explores.
 
 
@@ -915,6 +927,9 @@ This documentation is structured following the Diátaxis framework to assist in 
 
 
       - [looker-validate-project](https://mcp-toolbox.dev/integrations/looker/tools/looker-validate-project/): A "looker-validate-project" tool checks the syntax of a LookML project and reports any errors
+
+
+      - [Switch Git Branch Tool](https://mcp-toolbox.dev/integrations/looker/tools/looker-switch-git-branch/): A "looker-switch-git-branch" tool is used to switch the git branch of a LookML project.
 
 
     - [Samples](https://mcp-toolbox.dev/integrations/looker/samples/): No description provided.
@@ -1011,6 +1026,9 @@ This documentation is structured following the Diátaxis framework to assist in 
 
 
       - [mysql-list-table-fragmentation](https://mcp-toolbox.dev/integrations/mysql/tools/mysql-list-table-fragmentation/): A "mysql-list-table-fragmentation" tool lists top N fragemented tables in MySQL.
+
+
+      - [mysql-list-table-stats](https://mcp-toolbox.dev/integrations/mysql/tools/mysql-list-table-stats/): A "mysql-list-table-stats" tool report table statistics including table size, total latency, rows read, rows written, read and write latency for entire instance, a specified database, or a specified table.
 
 
       - [mysql-list-tables](https://mcp-toolbox.dev/integrations/mysql/tools/mysql-list-tables/): The "mysql-list-tables" tool lists schema information for all or specified tables in a MySQL database.
