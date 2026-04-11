@@ -2041,14 +2041,14 @@ func RunMCPPostgresGetColumnCardinalityTest(t *testing.T, ctx context.Context, p
 			if mcpResp.Result.IsError {
 				t.Fatalf("get_column_cardinality returned error result: %v", mcpResp.Result)
 			}
-			if len(mcpResp.Result.Content) == 0 {
+			gotObj := GetMCPResultText(t, mcpResp)
+			if len(gotObj) == 0 {
 				if tc.shouldHaveData {
 					t.Fatalf("get_column_cardinality returned empty content field")
 				}
 				t.Logf("DEBUG: get_column_cardinality returned empty content as expected for non-existent table")
 				return
 			}
-			gotObj := GetMCPResultText(t, mcpResp)
 
 			if tc.shouldHaveData {
 				if len(gotObj) == 0 {
