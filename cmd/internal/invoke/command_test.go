@@ -34,6 +34,8 @@ func invokeCommand(args []string) (string, error) {
 
 	buf := new(bytes.Buffer)
 	opts := internal.NewToolboxOptions(internal.WithIOStreams(buf, buf))
+	
+	internal.ConfigFileFlags(parentCmd.PersistentFlags(), opts)
 	internal.PersistentFlags(parentCmd, opts)
 
 	cmd := NewCommand(opts)
@@ -77,6 +79,28 @@ tools:
       - name: value
         type: integer
         description: int value
+  array-tool:
+    kind: sqlite-sql
+    source: my-sqlite
+    description: "array tool"
+    statement: "SELECT ? as val"
+    parameters:
+      - name: value
+        type: array
+        description: array value
+        items:
+          name: item
+          type: string
+          description: array item
+  map-tool:
+    kind: sqlite-sql
+    source: my-sqlite
+    description: "map tool"
+    statement: "SELECT ? as val"
+    parameters:
+      - name: value
+        type: map
+        description: map value
 `
 
 	toolsFilePath := filepath.Join(tmpDir, "tools.yaml")
@@ -93,28 +117,49 @@ tools:
 	}{
 		{
 			desc: "success - basic tool call",
-			args: []string{"invoke", "hello-sqlite", "--config", toolsFilePath},
+			args: []string{"--config", toolsFilePath, "invoke", "hello-sqlite"},
 			want: `"greeting": "hello"`,
 		},
 		{
 			desc: "success - tool call with parameters",
-			args: []string{"invoke", "echo-tool", `{"message": "world"}`, "--config", toolsFilePath},
+			args: []string{"--config", toolsFilePath, "invoke", "echo-tool", `{"message": "world"}`},
 			want: `"msg": "world"`,
 		},
 		{
 			desc: "success - tool call with integer parameters",
-			args: []string{"invoke", "int-tool", `{"value": 42}`, "--tools-file", toolsFilePath},
+			args: []string{"--tools-file", toolsFilePath, "invoke", "int-tool", `{"value": 42}`},
 			want: `"val": 42`,
 		},
 		{
+			desc: "success - tool call with flags",
+			args: []string{"--config", toolsFilePath, "invoke", "echo-tool", "--message", "value via flag"},
+			want: `"msg": "value via flag"`,
+		},
+		{
+			// Note: wantErr is true because SQLite doesn't support arrays as query arguments,
+			// but failing here proves that flag parsing and parameter validation succeeded.
+			desc: "success - tool call with array flags",
+			args: []string{"--config", toolsFilePath, "invoke", "array-tool", "--value", "val1,val2"},
+			wantErr: true,
+			errStr:  `tool execution failed`,
+		},
+		{
+			// Note: wantErr is true because SQLite doesn't support maps as query arguments,
+			// but failing here proves that flag parsing and parameter validation succeeded.
+			desc: "success - tool call with map flags",
+			args: []string{"--config", toolsFilePath, "invoke", "map-tool", "--value", `{"key": "val"}`},
+			wantErr: true,
+			errStr:  `tool execution failed`,
+		},
+		{
 			desc:    "error - tool not found",
-			args:    []string{"invoke", "non-existent", "--config", toolsFilePath},
+			args:    []string{"--config", toolsFilePath, "invoke", "non-existent"},
 			wantErr: true,
 			errStr:  `tool "non-existent" not found`,
 		},
 		{
 			desc:    "error - invalid JSON params",
-			args:    []string{"invoke", "echo-tool", `invalid-json`, "--config", toolsFilePath},
+			args:    []string{"--config", toolsFilePath, "invoke", "echo-tool", `{invalid-json}`},
 			wantErr: true,
 			errStr:  `params must be a valid JSON string`,
 		},
@@ -156,7 +201,7 @@ tools:
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	args := []string{"invoke", "bq-tool", "--config", toolsFilePath}
+	args := []string{"--config", toolsFilePath, "invoke", "bq-tool"}
 	_, err := invokeCommand(args)
 	if err == nil {
 		t.Fatal("expected error for tool requiring client auth, but got nil")
