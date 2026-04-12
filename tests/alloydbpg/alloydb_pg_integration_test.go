@@ -26,8 +26,6 @@ import (
 	"github.com/googleapis/mcp-toolbox/tests"
 )
 
-// Variables and connection helpers moved to alloydb_pg_mcp_test.go
-
 func TestAlloyDBPgToolEndpoints(t *testing.T) {
 	sourceConfig := getAlloyDBPgVars(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

@@ -157,7 +157,8 @@ func TestAlloyDBPgCallTool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create AlloyDB connection pool: %s", err)
 	}
-	defer pool.Close()
+	// Note: Don't defer pool.Close() here - the pool is only used for test setup/teardown.
+	// Closing it causes indefinite hangs due to background goroutines in the driver.
 
 	uniqueID := strings.ReplaceAll(uuid.New().String(), "-", "")
 
