@@ -205,3 +205,67 @@ func TestToolsetConfig_Initialize(t *testing.T) {
 		})
 	}
 }
+
+func TestToolset_ContainsTool(t *testing.T) {
+	t.Parallel()
+
+	toolset := tools.Toolset{
+		ToolsetConfig: tools.ToolsetConfig{
+			Name:      "test-toolset",
+			ToolNames: []string{"echo", "list_tables"},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		toolName string
+		want     bool
+	}{
+		{
+			name:     "tool exists in toolset",
+			toolName: "echo",
+			want:     true,
+		},
+		{
+			name:     "another tool exists in toolset",
+			toolName: "list_tables",
+			want:     true,
+		},
+		{
+			name:     "tool not in toolset",
+			toolName: "admin_delete",
+			want:     false,
+		},
+		{
+			name:     "empty tool name",
+			toolName: "",
+			want:     false,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := toolset.ContainsTool(tc.toolName)
+			if got != tc.want {
+				t.Errorf("ContainsTool(%q) = %v, want %v", tc.toolName, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestToolset_ContainsTool_EmptyToolset(t *testing.T) {
+	t.Parallel()
+
+	toolset := tools.Toolset{
+		ToolsetConfig: tools.ToolsetConfig{
+			Name:      "empty-toolset",
+			ToolNames: []string{},
+		},
+	}
+
+	if toolset.ContainsTool("anything") {
+		t.Error("ContainsTool should return false for empty toolset")
+	}
+}

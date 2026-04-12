@@ -36,6 +36,16 @@ func (p Promptset) ToConfig() PromptsetConfig {
 	return p.PromptsetConfig
 }
 
+// ContainsPrompt reports whether the promptset includes a prompt with the given name.
+func (p Promptset) ContainsPrompt(name string) bool {
+	for _, n := range p.PromptNames {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
 type PromptsetManifest struct {
 	ServerVersion   string              `json:"serverVersion"`
 	PromptsManifest map[string]Manifest `json:"prompts"`

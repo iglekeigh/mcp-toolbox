@@ -24,6 +24,70 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/util/parameters"
 )
 
+func TestPromptset_ContainsPrompt(t *testing.T) {
+	t.Parallel()
+
+	promptset := prompts.Promptset{
+		PromptsetConfig: prompts.PromptsetConfig{
+			Name:        "test-promptset",
+			PromptNames: []string{"greet", "summarize"},
+		},
+	}
+
+	tests := []struct {
+		name       string
+		promptName string
+		want       bool
+	}{
+		{
+			name:       "prompt exists in promptset",
+			promptName: "greet",
+			want:       true,
+		},
+		{
+			name:       "another prompt exists in promptset",
+			promptName: "summarize",
+			want:       true,
+		},
+		{
+			name:       "prompt not in promptset",
+			promptName: "admin_prompt",
+			want:       false,
+		},
+		{
+			name:       "empty prompt name",
+			promptName: "",
+			want:       false,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := promptset.ContainsPrompt(tc.promptName)
+			if got != tc.want {
+				t.Errorf("ContainsPrompt(%q) = %v, want %v", tc.promptName, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPromptset_ContainsPrompt_EmptyPromptset(t *testing.T) {
+	t.Parallel()
+
+	promptset := prompts.Promptset{
+		PromptsetConfig: prompts.PromptsetConfig{
+			Name:        "empty-promptset",
+			PromptNames: []string{},
+		},
+	}
+
+	if promptset.ContainsPrompt("anything") {
+		t.Error("ContainsPrompt should return false for empty promptset")
+	}
+}
+
 func TestPromptsetConfig_Initialize(t *testing.T) {
 	t.Parallel()
 

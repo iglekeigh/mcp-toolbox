@@ -35,6 +35,16 @@ func (t Toolset) ToConfig() ToolsetConfig {
 	return t.ToolsetConfig
 }
 
+// ContainsTool reports whether the toolset includes a tool with the given name.
+func (t Toolset) ContainsTool(name string) bool {
+	for _, n := range t.ToolNames {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
 type ToolsetManifest struct {
 	ServerVersion string              `json:"serverVersion"`
 	ToolsManifest map[string]Manifest `json:"tools"`
