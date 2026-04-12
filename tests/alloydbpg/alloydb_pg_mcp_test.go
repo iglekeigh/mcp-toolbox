@@ -138,7 +138,7 @@ func TestAlloyDBPgListTools(t *testing.T) {
 
 	// We expect standard Postgres tools to be listed
 	// This is a subset check, full list validation can be added if needed
-	_, tools, err := tests.GetMCPToolsList(t, nil)
+	_, tools, err := tests.GetMCPToolsList(t, nil, ctx)
 	if err != nil {
 		t.Fatalf("failed to get tools list: %v", err)
 	}

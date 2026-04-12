@@ -186,7 +186,7 @@ func getMCPResultText(t *testing.T, resp *MCPCallToolResponse) []any {
 }
 
 // GetMCPToolsList is a JSON-RPC harness that fetches the tools/list registry.
-func GetMCPToolsList(t *testing.T, requestHeader map[string]string) (int, []any, error) {
+func GetMCPToolsList(t *testing.T, requestHeader map[string]string, ctx ...context.Context) (int, []any, error) {
 	headers := NewMCPRequestHeader(t, requestHeader)
 
 	req := MCPListToolsRequest{
@@ -199,7 +199,7 @@ func GetMCPToolsList(t *testing.T, requestHeader map[string]string) (int, []any,
 		t.Fatalf("error marshalling tools/list request body: %v", err)
 	}
 
-	resp, respBody := RunRequest(t, http.MethodPost, "http://127.0.0.1:5000/mcp", bytes.NewBuffer(reqBody), headers)
+	resp, respBody := RunRequest(t, http.MethodPost, "http://127.0.0.1:5000/mcp", bytes.NewBuffer(reqBody), headers, ctx...)
 
 	var mcpResp jsonrpc.JSONRPCResponse
 	if err := json.Unmarshal(respBody, &mcpResp); err != nil {
