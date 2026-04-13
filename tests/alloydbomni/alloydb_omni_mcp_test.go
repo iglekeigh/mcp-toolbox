@@ -19,9 +19,11 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
 	"github.com/googleapis/mcp-toolbox/tests"
 	"github.com/testcontainers/testcontainers-go"
