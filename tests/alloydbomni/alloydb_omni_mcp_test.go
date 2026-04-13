@@ -19,11 +19,9 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/googleapis/genai-toolbox/internal/testutils"
 	"github.com/googleapis/genai-toolbox/tests"
 	"github.com/testcontainers/testcontainers-go"
@@ -84,6 +82,15 @@ func setupAlloyDBContainer(ctx context.Context, t *testing.T) (string, string, f
 func TestAlloyDBOmniListTools(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
+
+	AlloyDBHost, AlloyDBPort, containerCleanup := setupAlloyDBContainer(ctx, t)
+	defer containerCleanup()
+
+	os.Setenv("ALLOYDB_OMNI_HOST", AlloyDBHost)
+	os.Setenv("ALLOYDB_OMNI_PORT", AlloyDBPort)
+	os.Setenv("ALLOYDB_OMNI_USER", AlloyDBUser)
+	os.Setenv("ALLOYDB_OMNI_PASSWORD", AlloyDBPass)
+	os.Setenv("ALLOYDB_OMNI_DATABASE", AlloyDBDatabase)
 
 	args := []string{"--prebuilt", "alloydb-omni"}
 
