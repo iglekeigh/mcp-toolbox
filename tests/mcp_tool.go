@@ -172,7 +172,7 @@ func GetMCPResultText(t *testing.T, resp *MCPCallToolResponse) []any {
 		} else {
 			if slice, ok := item.([]any); ok {
 				res = append(res, slice...)
-			} else {
+			} else if item != nil {
 				res = append(res, item)
 			}
 		}
