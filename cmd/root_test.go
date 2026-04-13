@@ -637,12 +637,22 @@ func TestMutuallyExclusiveFlags(t *testing.T) {
 		{
 			desc:      "--config and --configs",
 			args:      []string{"--config", "my.yaml", "--configs", "a.yaml,b.yaml"},
-			errString: "--config/--tools-file, --configs/--tools-files, and --config-folder/--tools-folder flags cannot be used simultaneously",
+			errString: "--config/--tools-file, --configs/--tools-files, --config-folder/--tools-folder, and --config-string flags cannot be used simultaneously",
 		},
 		{
 			desc:      "--config-folder and --configs",
 			args:      []string{"--config-folder", "./", "--configs", "a.yaml,b.yaml"},
-			errString: "--config/--tools-file, --configs/--tools-files, and --config-folder/--tools-folder flags cannot be used simultaneously",
+			errString: "--config/--tools-file, --configs/--tools-files, --config-folder/--tools-folder, and --config-string flags cannot be used simultaneously",
+		},
+		{
+			desc:      "--config and --config-string",
+			args:      []string{"--config", "my.yaml", "--config-string", "some valid yaml"},
+			errString: "--config/--tools-file, --configs/--tools-files, --config-folder/--tools-folder, and --config-string flags cannot be used simultaneously",
+		},
+		{
+			desc:      "--config-string and --configs",
+			args:      []string{"--config-string", "some valid yaml", "--configs", "a.yaml,b.yaml"},
+			errString: "--config/--tools-file, --configs/--tools-files, --config-folder/--tools-folder, and --config-string flags cannot be used simultaneously",
 		},
 	}
 

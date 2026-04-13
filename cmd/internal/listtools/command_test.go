@@ -1,0 +1,107 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package listtools
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/googleapis/genai-toolbox/cmd/internal"
+	_ "github.com/googleapis/genai-toolbox/internal/sources/sqlite"
+	_ "github.com/googleapis/genai-toolbox/internal/tools/sqlite/sqlitesql"
+	"github.com/spf13/cobra"
+)
+
+func listtoolsCommand(args []string) (string, error) {
+	parentCmd := &cobra.Command{Use: "toolbox"}
+
+	buf := new(bytes.Buffer)
+	opts := internal.NewToolboxOptions(internal.WithIOStreams(buf, buf))
+
+	cmd := NewCommand(opts)
+	parentCmd.AddCommand(cmd)
+	parentCmd.SetArgs(args)
+
+	err := parentCmd.Execute()
+	return buf.String(), err
+}
+
+func TestListTools(t *testing.T) {
+	tmpDir := t.TempDir()
+	toolsFileContent := `
+sources:
+  my-sqlite:
+    kind: sqlite
+    database: test.db
+tools:
+  hello-sqlite:
+    kind: sqlite-sql
+    source: my-sqlite
+    description: "hello tool"
+    statement: "SELECT 'hello' as greeting"
+`
+	toolsFilePath := filepath.Join(tmpDir, "tools.yaml")
+	if err := os.WriteFile(toolsFilePath, []byte(toolsFileContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	output, err := listtoolsCommand([]string{"list-tools", "--config", toolsFilePath})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, "Available Tools:") {
+		t.Errorf("expected output to contain 'Available Tools:', got %q", output)
+	}
+	if !strings.Contains(output, "hello-sqlite") {
+		t.Errorf("expected output to contain 'hello-sqlite', got %q", output)
+	}
+	if !strings.Contains(output, "hello tool") {
+		t.Errorf("expected output to contain 'hello tool', got %q", output)
+	}
+}
+
+func TestListToolsConfigString(t *testing.T) {
+	toolsFileContent := `
+sources:
+  my-sqlite:
+    kind: sqlite
+    database: test.db
+tools:
+  hello-sqlite:
+    kind: sqlite-sql
+    source: my-sqlite
+    description: "hello tool"
+    statement: "SELECT 'hello' as greeting"
+`
+
+	output, err := listtoolsCommand([]string{"list-tools", "--config-string", toolsFileContent})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, "Available Tools:") {
+		t.Errorf("expected output to contain 'Available Tools:', got %q", output)
+	}
+	if !strings.Contains(output, "hello-sqlite") {
+		t.Errorf("expected output to contain 'hello-sqlite', got %q", output)
+	}
+	if !strings.Contains(output, "hello tool") {
+		t.Errorf("expected output to contain 'hello tool', got %q", output)
+	}
+}
