@@ -198,14 +198,27 @@ func TestAlloyDBOmniCallTool(t *testing.T) {
 	tests.RunMCPPostgresListStoredProcedureTest(t, ctx, pool)
 
 	toolsToTest := map[string]string{
-		"list_autovacuum_configurations":    `{}`,
-		"list_memory_configurations":        `{}`,
-		"list_top_bloated_tables":           `{"limit": 10}`,
-		"list_replication_slots":            `{}`,
-		"list_invalid_indexes":              `{}`,
-		"get_query_plan":                    `{"query": "SELECT 1"}`,
-		"list_columnar_configurations":      `{}`,
-		"list_columnar_recommended_columns": `{}`,
+		"list_autovacuum_configurations": `{}`,
+		"list_memory_configurations":     `{}`,
+		"list_top_bloated_tables":        `{"limit": 10}`,
+		"list_replication_slots":         `{}`,
+		"list_invalid_indexes":           `{}`,
+		"get_query_plan":                 `{"query": "SELECT 1"}`,
+		"list_columnar_configurations":   `{}`,
 	}
 	tests.RunMCPStatementToolsTest(t, ctx, toolsToTest)
+
+	t.Run("list_columnar_recommended_columns_expect_error", func(t *testing.T) {
+		statusCode, mcpResp, err := tests.InvokeMCPTool(t, ctx, "list_columnar_recommended_columns", nil, nil)
+		if err != nil {
+			t.Fatalf("native error: %s", err)
+		}
+		if statusCode != http.StatusOK {
+			t.Fatalf("status code: %d", statusCode)
+		}
+		if !mcpResp.Result.IsError {
+			t.Fatalf("expected error result but got success")
+		}
+		t.Logf("Got expected error result as expected: %v", mcpResp.Result)
+	})
 }
