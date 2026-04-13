@@ -43,6 +43,7 @@ type ToolboxOptions struct {
 	Config          string
 	Configs         []string
 	ConfigFolder    string
+	ConfigContent   string
 	PrebuiltConfigs []string
 	VersionNum      string
 }
@@ -135,7 +136,7 @@ func (opts *ToolboxOptions) Setup(ctx context.Context) (context.Context, func(co
 func (opts *ToolboxOptions) GetCustomConfigFiles(ctx context.Context) ([]string, bool, error) {
 	// Determine if Custom Files should be loaded
 	// Check for explicit custom flags
-	isCustomConfigured := opts.Config != "" || len(opts.Configs) > 0 || opts.ConfigFolder != ""
+	isCustomConfigured := opts.Config != "" || len(opts.Configs) > 0 || opts.ConfigFolder != "" || opts.ConfigContent != ""
 
 	logger, err := util.LoggerFromContext(ctx)
 	if err != nil {
@@ -144,11 +145,15 @@ func (opts *ToolboxOptions) GetCustomConfigFiles(ctx context.Context) ([]string,
 
 	// Load Custom Configurations
 	if isCustomConfigured {
-		// Enforce exclusivity among custom flags (tools-file vs tools-files vs tools-folder)
-		if (opts.Config != "" && len(opts.Configs) > 0) ||
-			(opts.Config != "" && opts.ConfigFolder != "") ||
-			(len(opts.Configs) > 0 && opts.ConfigFolder != "") {
-			errMsg := fmt.Errorf("--config/--tools-file, --configs/--tools-files, and --config-folder/--tools-folder flags cannot be used simultaneously")
+		// Enforce exclusivity among custom flags
+		count := 0
+		if opts.Config != "" { count++ }
+		if len(opts.Configs) > 0 { count++ }
+		if opts.ConfigFolder != "" { count++ }
+		if opts.ConfigContent != "" { count++ }
+		
+		if count > 1 {
+			errMsg := fmt.Errorf("--config/--tools-file, --configs/--tools-files, --config-folder/--tools-folder, and --config-string flags cannot be used simultaneously")
 			logger.ErrorContext(ctx, errMsg.Error())
 			return nil, isCustomConfigured, errMsg
 		}
@@ -161,9 +166,12 @@ func (opts *ToolboxOptions) GetCustomConfigFiles(ctx context.Context) ([]string,
 			// Use tools-folder
 			allFiles, err := GetPathsFromConfigFolder(ctx, opts.ConfigFolder)
 			return allFiles, isCustomConfigured, err
-		} else {
+		} else if opts.Config != "" {
 			// use tools-file
 			return []string{opts.Config}, isCustomConfigured, nil
+		} else {
+			// use config-string (handled in LoadConfig directly)
+			return []string{}, isCustomConfigured, nil
 		}
 	}
 
@@ -221,10 +229,21 @@ func (opts *ToolboxOptions) LoadConfig(ctx context.Context, parser *ConfigParser
 
 	// Load Custom Configurations
 	if isCustomConfigured {
-		customTools, err := parser.LoadAndMergeConfigs(ctx, filesPaths)
-		if err != nil {
-			logger.ErrorContext(ctx, err.Error())
-			return isCustomConfigured, err
+		var customTools Config
+		var err error
+		if opts.ConfigContent != "" {
+			customTools, err = parser.ParseConfig(ctx, []byte(opts.ConfigContent))
+			if err != nil {
+				errMsg := fmt.Errorf("unable to parse config string: %w", err)
+				logger.ErrorContext(ctx, errMsg.Error())
+				return isCustomConfigured, errMsg
+			}
+		} else if len(filesPaths) > 0 {
+			customTools, err = parser.LoadAndMergeConfigs(ctx, filesPaths)
+			if err != nil {
+				logger.ErrorContext(ctx, err.Error())
+				return isCustomConfigured, err
+			}
 		}
 		allConfigs = append(allConfigs, customTools)
 	}
