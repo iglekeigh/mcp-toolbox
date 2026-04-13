@@ -507,7 +507,7 @@ func RunMCPExecuteSqlToolInvokeTest(t *testing.T, ctx context.Context, createTab
 			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, tc.toolName, tc.args, tc.headers)
 
 			if tc.isErr {
-				if err == nil && !mcpResp.Result.IsError {
+				if err == nil && mcpResp.Error == nil && !mcpResp.Result.IsError {
 					t.Fatalf("expected error but got none")
 				}
 				return
@@ -656,7 +656,7 @@ func RunMCPToolInvokeWithTemplateParameters(t *testing.T, ctx context.Context, t
 			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, tc.toolName, tc.args, nil)
 
 			if tc.isErr {
-				if err == nil && !mcpResp.Result.IsError {
+				if err == nil && mcpResp.Error == nil && !mcpResp.Result.IsError {
 					t.Fatalf("expected error but got none")
 				}
 				return
