@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/googleapis/genai-toolbox/internal/testutils"
-	"github.com/googleapis/genai-toolbox/tests"
+	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/tests"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -108,7 +108,7 @@ func TestAlloyDBOmniListTools(t *testing.T) {
 		t.Fatalf("toolbox didn't start successfully: %s", err)
 	}
 
-	statusCode, toolsList, err := tests.GetMCPToolsList(t, nil)
+	statusCode, toolsList, err := tests.GetMCPToolsList(t, ctx, nil)
 	if err != nil {
 		t.Fatalf("native error executing tools/list: %s", err)
 	}
@@ -177,8 +177,8 @@ func TestAlloyDBOmniCallTool(t *testing.T) {
 	tests.RunMCPPostgresListViewsTest(t, ctx, pool)
 	tests.RunMCPPostgresListSchemasTest(t, ctx, pool, AlloyDBUser, uniqueID)
 	tests.RunMCPPostgresListActiveQueriesTest(t, ctx, pool)
-	tests.RunMCPPostgresListAvailableExtensionsTest(t)
-	tests.RunMCPPostgresListInstalledExtensionsTest(t)
+	tests.RunMCPPostgresListAvailableExtensionsTest(t, ctx)
+	tests.RunMCPPostgresListInstalledExtensionsTest(t, ctx)
 	tests.RunMCPPostgresDatabaseOverviewTest(t, ctx, pool)
 	tests.RunMCPPostgresListTriggersTest(t, ctx, pool)
 	tests.RunMCPPostgresListIndexesTest(t, ctx, pool)
@@ -189,7 +189,7 @@ func TestAlloyDBOmniCallTool(t *testing.T) {
 	tests.RunMCPPostgresGetColumnCardinalityTest(t, ctx, pool)
 	tests.RunMCPPostgresListTableStatsTest(t, ctx, pool)
 	tests.RunMCPPostgresListPublicationTablesTest(t, ctx, pool)
-	tests.RunMCPPostgresListTableSpacesTest(t)
+	tests.RunMCPPostgresListTableSpacesTest(t, ctx)
 	tests.RunMCPPostgresListPgSettingsTest(t, ctx, pool)
 	tests.RunMCPPostgresListDatabaseStatsTest(t, ctx, pool)
 	tests.RunMCPPostgresListRolesTest(t, ctx, pool)
@@ -205,5 +205,5 @@ func TestAlloyDBOmniCallTool(t *testing.T) {
 		"list_columnar_configurations":      `{}`,
 		"list_columnar_recommended_columns": `{}`,
 	}
-	tests.RunMCPStatementToolsTest(t, toolsToTest)
+	tests.RunMCPStatementToolsTest(t, ctx, toolsToTest)
 }
