@@ -84,6 +84,8 @@ type ServerConfig struct {
 	UserAgentMetadata []string
 	// PollInterval sets the polling frequency for configuration file updates.
 	PollInterval int
+	// SkipSourceInitialization indicates if the server should skip initializing sources.
+	SkipSourceInitialization bool
 }
 
 type logFormat string

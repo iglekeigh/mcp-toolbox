@@ -89,6 +89,8 @@ func run(cmd *skillsCmd, opts *internal.ToolboxOptions) error {
 		return err
 	}
 
+	opts.Cfg.SkipSourceInitialization = true
+
 	if err := os.MkdirAll(cmd.outputDir, 0755); err != nil {
 		errMsg := fmt.Errorf("error creating output directory: %w", err)
 		opts.Logger.ErrorContext(ctx, errMsg.Error())

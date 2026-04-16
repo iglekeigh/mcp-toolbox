@@ -89,6 +89,14 @@ func InitializeConfigs(ctx context.Context, cfg ServerConfig) (
 	// initialize and validate the sources from configs
 	sourcesMap := make(map[string]sources.Source)
 	for name, sc := range cfg.SourceConfigs {
+		if cfg.SkipSourceInitialization {
+			sourcesMap[name] = &sources.UninitializedSource{
+				Name:   name,
+				Config: sc,
+			}
+			continue
+		}
+
 		s, err := func() (sources.Source, error) {
 			childCtx, span := instrumentation.Tracer.Start(
 				ctx,
@@ -183,6 +191,10 @@ func InitializeConfigs(ctx context.Context, cfg ServerConfig) (
 			defer span.End()
 			t, err := tc.Initialize(sourcesMap)
 			if err != nil {
+				if cfg.SkipSourceInitialization {
+					l.WarnContext(ctx, fmt.Sprintf("unable to initialize tool %q (source skip enabled): %v", name, err))
+					return nil, nil
+				}
 				return nil, fmt.Errorf("unable to initialize tool %q: %w", name, err)
 			}
 			return t, nil
@@ -190,7 +202,9 @@ func InitializeConfigs(ctx context.Context, cfg ServerConfig) (
 		if err != nil {
 			return nil, nil, nil, nil, nil, nil, nil, err
 		}
-		toolsMap[name] = t
+		if t != nil {
+			toolsMap[name] = t
+		}
 	}
 	toolNames := make([]string, 0, len(toolsMap))
 	for name := range toolsMap {

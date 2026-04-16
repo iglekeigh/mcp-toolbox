@@ -16,6 +16,7 @@ package sources
 
 import (
 	"context"
+	"net/http"
 
 	"fmt"
 
@@ -64,6 +65,26 @@ type Source interface {
 	SourceType() string
 	ToConfig() SourceConfig
 }
+
+// UninitializedSource is a placeholder for a source that hasn't been initialized yet.
+// It implements many common methods to satisfy type assertions during tool initialization.
+type UninitializedSource struct {
+	Name   string
+	Config SourceConfig
+}
+
+func (s *UninitializedSource) SourceType() string            { return s.Config.SourceConfigType() }
+func (s *UninitializedSource) ToConfig() SourceConfig        { return s.Config }
+func (s *UninitializedSource) HttpDefaultHeaders() map[string]string { return nil }
+func (s *UninitializedSource) HttpBaseURL() string           { return "" }
+func (s *UninitializedSource) HttpQueryParams() map[string]string { return nil }
+func (s *UninitializedSource) RunRequest(ctx context.Context, r *http.Request) (any, error) { return nil, nil }
+func (s *UninitializedSource) PostgresPool() any             { return nil }
+func (s *UninitializedSource) SQLiteDB() any                 { return nil }
+func (s *UninitializedSource) BigQueryClient() any           { return nil }
+func (s *UninitializedSource) RunSQL(ctx context.Context, stmt string, args []any) (any, error) { return nil, nil }
+func (s *UninitializedSource) GetDefaultProject() string    { return "" }
+func (s *UninitializedSource) UseClientAuthorization() bool { return false }
 
 // InitConnectionSpan adds a span for database pool connection initialization
 func InitConnectionSpan(ctx context.Context, tracer trace.Tracer, sourceType, sourceName string) (context.Context, trace.Span) {
