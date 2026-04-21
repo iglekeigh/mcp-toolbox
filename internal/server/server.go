@@ -90,6 +90,9 @@ func InitializeConfigs(ctx context.Context, cfg ServerConfig) (
 	sourcesMap := make(map[string]sources.Source)
 	for name, sc := range cfg.SourceConfigs {
 		s, err := func() (sources.Source, error) {
+			if cfg.MetadataOnly {
+				return sources.MetadataSource{Config: sc}, nil
+			}
 			childCtx, span := instrumentation.Tracer.Start(
 				ctx,
 				"toolbox/server/source/init",

@@ -75,3 +75,36 @@ func InitConnectionSpan(ctx context.Context, tracer trace.Tracer, sourceType, so
 	)
 	return ctx, span
 }
+
+type MetadataSource struct {
+	Config SourceConfig
+}
+
+func (s MetadataSource) SourceType() string {
+	return s.Config.SourceConfigType()
+}
+
+func (s MetadataSource) ToConfig() SourceConfig {
+	return s.Config
+}
+
+func (s MetadataSource) GetDefaultProject() string {
+	return ""
+}
+
+func (s MetadataSource) UseClientAuthorization() bool {
+	return false
+}
+
+func (s MetadataSource) GetAuthTokenHeaderName() string {
+	return "Authorization"
+}
+
+func (s MetadataSource) Query(ctx context.Context, sql string, args ...interface{}) (any, error) {
+	return nil, nil
+}
+
+func (s MetadataSource) RunSQL(ctx context.Context, statement string, params []any) (any, error) {
+	return nil, nil
+}
+

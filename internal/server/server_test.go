@@ -844,3 +844,42 @@ func TestLegacyAPIGone(t *testing.T) {
 		t.Errorf("expected response body to contain %q, got %q", want, string(body))
 	}
 }
+
+func TestInitializeMetadataOnly(t *testing.T) {
+	ctx, err := testutils.ContextWithNewLogger()
+	if err != nil {
+		t.Fatalf("error setting up logger: %s", err)
+	}
+
+	cfg := server.ServerConfig{
+		Version: "0.0.0",
+		SourceConfigs: map[string]sources.SourceConfig{
+			"test-source": &alloydbpg.Config{
+				Name: "test-source",
+				Type: "alloydb-postgres",
+			},
+		},
+	}
+
+	instrumentation, err := telemetry.CreateTelemetryInstrumentation(cfg.Version)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	ctx = util.WithInstrumentation(ctx, instrumentation)
+
+	cfg.MetadataOnly = true
+	sourcesMap, _, _, _, _, _, _, err := server.InitializeConfigs(ctx, cfg)
+	if err != nil {
+		t.Fatalf("InitializeConfigs failed: %v", err)
+	}
+
+	src, ok := sourcesMap["test-source"]
+	if !ok {
+		t.Fatalf("expected source 'test-source' in map")
+	}
+
+	if _, ok := src.(sources.MetadataSource); !ok {
+		t.Errorf("expected source to be sources.MetadataSource, got %T", src)
+	}
+}
+

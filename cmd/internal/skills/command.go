@@ -26,9 +26,7 @@ import (
 	"github.com/googleapis/mcp-toolbox/cmd/internal"
 	"github.com/googleapis/mcp-toolbox/internal/server"
 	"github.com/googleapis/mcp-toolbox/internal/server/resources"
-	"github.com/googleapis/mcp-toolbox/internal/sources"
 	"github.com/googleapis/mcp-toolbox/internal/tools"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/spf13/cobra"
 )
@@ -231,17 +229,7 @@ func run(cmd *skillsCmd, opts *internal.ToolboxOptions) error {
 }
 
 func (c *skillsCmd) collectTools(ctx context.Context, opts *internal.ToolboxOptions) (map[string]map[string]tools.Tool, error) {
-	if !c.testConnection {
-		for name, sc := range opts.Cfg.SourceConfigs {
-			opts.Cfg.SourceConfigs[name] = dummySourceConfig{
-				SourceConfig: sc,
-				name:         name,
-				kind:         sc.SourceConfigType(),
-			}
-		}
-	}
-
-	// Initialize Resources
+	opts.Cfg.MetadataOnly = !c.testConnection
 	sourcesMap, authServicesMap, embeddingModelsMap, toolsMap, toolsetsMap, promptsMap, promptsetsMap, err := server.InitializeConfigs(ctx, opts.Cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize resources: %w", err)
@@ -315,46 +303,3 @@ func copyDir(src, dst string) error {
 	})
 }
 
-type dummySource struct {
-	name string
-	kind string
-	cfg  sources.SourceConfig
-}
-
-func (d dummySource) SourceType() string {
-	return d.kind
-}
-
-func (d dummySource) ToConfig() sources.SourceConfig {
-	return d.cfg
-}
-
-func (d dummySource) GetDefaultProject() string {
-	return ""
-}
-
-func (d dummySource) UseClientAuthorization() bool {
-	return false
-}
-
-func (d dummySource) GetAuthTokenHeaderName() string {
-	return "Authorization"
-}
-
-func (d dummySource) Query(ctx context.Context, sql string, args ...interface{}) (any, error) {
-	return nil, nil
-}
-
-func (d dummySource) RunSQL(ctx context.Context, statement string, params []any) (any, error) {
-	return nil, nil
-}
-
-type dummySourceConfig struct {
-	sources.SourceConfig
-	name string
-	kind string
-}
-
-func (d dummySourceConfig) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	return dummySource{name: d.name, kind: d.kind, cfg: d.SourceConfig}, nil
-}
