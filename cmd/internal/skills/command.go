@@ -26,7 +26,9 @@ import (
 	"github.com/googleapis/mcp-toolbox/cmd/internal"
 	"github.com/googleapis/mcp-toolbox/internal/server"
 	"github.com/googleapis/mcp-toolbox/internal/server/resources"
+	"github.com/googleapis/mcp-toolbox/internal/sources"
 	"github.com/googleapis/mcp-toolbox/internal/tools"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/spf13/cobra"
 )
@@ -42,6 +44,7 @@ type skillsCmd struct {
 	additionalNotes string
 	invocationMode  string
 	toolboxVersion  string
+	testConnection  bool
 }
 
 // NewCommand creates a new Command.
@@ -66,6 +69,7 @@ func NewCommand(opts *internal.ToolboxOptions) *cobra.Command {
 	flags.StringVar(&cmd.additionalNotes, "additional-notes", "", "Additional notes to add under the Usage section of the generated SKILL.md")
 	flags.StringVar(&cmd.invocationMode, "invocation-mode", "npx", "Invocation mode for the generated scripts: 'binary' or 'npx'")
 	flags.StringVar(&cmd.toolboxVersion, "toolbox-version", opts.VersionNum, "Version of @toolbox-sdk/server to use for npx approach")
+	flags.BoolVar(&cmd.testConnection, "test-connection", false, "If true, verifies source connections during generation.")
 	_ = cmd.MarkFlagRequired("name")
 	_ = cmd.MarkFlagRequired("description")
 	return cmd.Command
@@ -227,6 +231,16 @@ func run(cmd *skillsCmd, opts *internal.ToolboxOptions) error {
 }
 
 func (c *skillsCmd) collectTools(ctx context.Context, opts *internal.ToolboxOptions) (map[string]map[string]tools.Tool, error) {
+	if !c.testConnection {
+		for name, sc := range opts.Cfg.SourceConfigs {
+			opts.Cfg.SourceConfigs[name] = dummySourceConfig{
+				SourceConfig: sc,
+				name:         name,
+				kind:         sc.SourceConfigType(),
+			}
+		}
+	}
+
 	// Initialize Resources
 	sourcesMap, authServicesMap, embeddingModelsMap, toolsMap, toolsetsMap, promptsMap, promptsetsMap, err := server.InitializeConfigs(ctx, opts.Cfg)
 	if err != nil {
@@ -299,4 +313,48 @@ func copyDir(src, dst string) error {
 		}
 		return copyFile(path, destPath)
 	})
+}
+
+type dummySource struct {
+	name string
+	kind string
+	cfg  sources.SourceConfig
+}
+
+func (d dummySource) SourceType() string {
+	return d.kind
+}
+
+func (d dummySource) ToConfig() sources.SourceConfig {
+	return d.cfg
+}
+
+func (d dummySource) GetDefaultProject() string {
+	return ""
+}
+
+func (d dummySource) UseClientAuthorization() bool {
+	return false
+}
+
+func (d dummySource) GetAuthTokenHeaderName() string {
+	return "Authorization"
+}
+
+func (d dummySource) Query(ctx context.Context, sql string, args ...interface{}) (any, error) {
+	return nil, nil
+}
+
+func (d dummySource) RunSQL(ctx context.Context, statement string, params []any) (any, error) {
+	return nil, nil
+}
+
+type dummySourceConfig struct {
+	sources.SourceConfig
+	name string
+	kind string
+}
+
+func (d dummySourceConfig) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
+	return dummySource{name: d.name, kind: d.kind, cfg: d.SourceConfig}, nil
 }

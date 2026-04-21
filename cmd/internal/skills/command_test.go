@@ -391,3 +391,55 @@ func TestGenerateSkill_FlagValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateSkill_TestConnectionFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputDir := filepath.Join(tmpDir, "skills")
+
+	toolsFileContent := `
+sources:
+  my-sqlite:
+    kind: sqlite
+    database: ":memory:"
+tools:
+  hello-sqlite:
+    kind: sqlite-sql
+    source: my-sqlite
+    description: "hello tool"
+    statement: "SELECT 'hello' as greeting"
+`
+
+	toolsFilePath := filepath.Join(tmpDir, "tools.yaml")
+	if err := os.WriteFile(toolsFilePath, []byte(toolsFileContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Test with --test-connection=false (explicit)
+	argsFalse := []string{
+		"skills-generate",
+		"--config", toolsFilePath,
+		"--output-dir", filepath.Join(outputDir, "false"),
+		"--name", "hello-sqlite",
+		"--description", "hello tool",
+		"--test-connection=false",
+	}
+	got, err := invokeCommand(argsFalse)
+	if err != nil {
+		t.Fatalf("command failed with --test-connection=false: %v\nOutput: %s", err, got)
+	}
+
+	// Test with --test-connection=true
+	argsTrue := []string{
+		"skills-generate",
+		"--config", toolsFilePath,
+		"--output-dir", filepath.Join(outputDir, "true"),
+		"--name", "hello-sqlite",
+		"--description", "hello tool",
+		"--test-connection=true",
+	}
+	got, err = invokeCommand(argsTrue)
+	if err != nil {
+		t.Fatalf("command failed with --test-connection=true: %v\nOutput: %s", err, got)
+	}
+}
+
