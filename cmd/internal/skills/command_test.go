@@ -442,4 +442,3 @@ tools:
 		t.Fatalf("command failed with --test-connection=true: %v\nOutput: %s", err, got)
 	}
 }
-

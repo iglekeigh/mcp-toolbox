@@ -16,7 +16,6 @@ package sources
 
 import (
 	"context"
-
 	"fmt"
 
 	"github.com/goccy/go-yaml"
@@ -107,4 +106,3 @@ func (s MetadataSource) Query(ctx context.Context, sql string, args ...interface
 func (s MetadataSource) RunSQL(ctx context.Context, statement string, params []any) (any, error) {
 	return nil, nil
 }
-
