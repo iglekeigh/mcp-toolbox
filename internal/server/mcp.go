@@ -429,13 +429,9 @@ func sseHandler(s *Server, w http.ResponseWriter, r *http.Request) {
 		toolsetURL = fmt.Sprintf("/%s", toolsetName)
 	}
 	// attach url query params to message endpoint
-	rawQuery := r.URL.RawQuery
-	var messageEndpoint string
-	if rawQuery != "" {
-		messageEndpoint = fmt.Sprintf("%s://%s/mcp%s?sessionId=%s&%s", proto, r.Host, toolsetURL, sessionId, rawQuery)
-	} else {
-		messageEndpoint = fmt.Sprintf("%s://%s/mcp%s?sessionId=%s", proto, r.Host, toolsetURL, sessionId)
-	}
+	q := r.URL.Query()
+	q.Set("sessionId", sessionId)
+	messageEndpoint := fmt.Sprintf("%s://%s/mcp%s?%s", proto, r.Host, toolsetURL, q.Encode())
 
 	s.logger.DebugContext(ctx, fmt.Sprintf("sending endpoint event: %s", messageEndpoint))
 	fmt.Fprintf(w, "event: endpoint\ndata: %s\n\n", messageEndpoint)

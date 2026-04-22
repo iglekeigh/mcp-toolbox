@@ -16,8 +16,9 @@ When an MCP client connects to the server via SSE with query parameters (e.g., `
 
 1. **Schema Filtering**: The server automatically removes the bound parameters (like `project`) from the `inputSchema` of all tools returned by the `tools/list` endpoint. The client will not see these parameters and will not be prompted to provide them.
 2. **Argument Injection**: When the client calls any tool via `tools/call`, the server automatically injects the bound values from the URL into the tool arguments before execution.
+3. **Type Conversion**: Since URL query parameters are always extracted as strings, the server automatically attempts to convert the string value to the correct type if the tool parameter is defined as an `integer`, `boolean`, or `number`. Complex types like arrays or objects are not supported for automatic conversion.
 
-This effectively abstracts the bound parameters from the client, presenting a dynamically restricted schema.
+This effectively abstracts the bound parameters from the client, presenting a dynamically restricted schema while enforcing execution context at the transport layer.
 
 ## Example
 

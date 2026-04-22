@@ -590,7 +590,7 @@ func TestMcpEndpoint(t *testing.T) {
 									"inputSchema": basicInputSchema,
 								},
 								map[string]any{
-									"name":        "string_param_tool",
+									"name": "string_param_tool",
 									"inputSchema": map[string]any{
 										"type": "object",
 										"properties": map[string]any{
@@ -624,7 +624,7 @@ func TestMcpEndpoint(t *testing.T) {
 									"inputSchema": basicInputSchema,
 								},
 								map[string]any{
-									"name":        "some_params",
+									"name": "some_params",
 									"inputSchema": map[string]any{
 										"type": "object",
 										"properties": map[string]any{
@@ -647,7 +647,7 @@ func TestMcpEndpoint(t *testing.T) {
 									"inputSchema": basicInputSchema,
 								},
 								map[string]any{
-									"name":        "string_param_tool",
+									"name": "string_param_tool",
 									"inputSchema": map[string]any{
 										"type": "object",
 										"properties": map[string]any{

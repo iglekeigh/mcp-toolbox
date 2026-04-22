@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/googleapis/mcp-toolbox/internal/prompts"
@@ -173,6 +174,28 @@ func toolsCallHandler(ctx context.Context, id jsonrpc.RequestId, resourceMgr *re
 		}
 		for k, v := range urlParams {
 			data[k] = v
+		}
+
+		// Attempt type conversion for known parameters
+		toolParams := tool.GetParameters()
+		for _, p := range toolParams {
+			name := p.GetName()
+			if val, ok := urlParams[name]; ok {
+				switch p.GetType() {
+				case "integer":
+					if i, err := strconv.Atoi(val); err == nil {
+						data[name] = i
+					}
+				case "boolean":
+					if b, err := strconv.ParseBool(val); err == nil {
+						data[name] = b
+					}
+				case "number":
+					if f, err := strconv.ParseFloat(val, 64); err == nil {
+						data[name] = f
+					}
+				}
+			}
 		}
 	}
 
