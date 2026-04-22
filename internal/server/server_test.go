@@ -31,7 +31,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/googleapis/mcp-toolbox/internal/auth"
 	"github.com/googleapis/mcp-toolbox/internal/auth/generic"
+	"github.com/googleapis/mcp-toolbox/internal/auth/google"
 	"github.com/googleapis/mcp-toolbox/internal/embeddingmodels"
+	"github.com/googleapis/mcp-toolbox/internal/embeddingmodels/gemini"
 	"github.com/googleapis/mcp-toolbox/internal/log"
 	"github.com/googleapis/mcp-toolbox/internal/prompts"
 	"github.com/googleapis/mcp-toolbox/internal/server"
@@ -859,6 +861,20 @@ func TestInitializeMetadataOnly(t *testing.T) {
 				Type: "alloydb-postgres",
 			},
 		},
+		AuthServiceConfigs: map[string]auth.AuthServiceConfig{
+			"test-auth": &google.Config{
+				Name:     "test-auth",
+				Type:     "google",
+				ClientID: "client-id",
+			},
+		},
+		EmbeddingModelConfigs: map[string]embeddingmodels.EmbeddingModelConfig{
+			"test-model": &gemini.Config{
+				Name:  "test-model",
+				Type:  "gemini",
+				Model: "gemini-pro",
+			},
+		},
 	}
 
 	instrumentation, err := telemetry.CreateTelemetryInstrumentation(cfg.Version)
@@ -868,7 +884,7 @@ func TestInitializeMetadataOnly(t *testing.T) {
 	ctx = util.WithInstrumentation(ctx, instrumentation)
 
 	cfg.MetadataOnly = true
-	sourcesMap, _, _, _, _, _, _, err := server.InitializeConfigs(ctx, cfg)
+	sourcesMap, authServicesMap, embeddingModelsMap, _, _, _, _, err := server.InitializeConfigs(ctx, cfg)
 	if err != nil {
 		t.Fatalf("InitializeConfigs failed: %v", err)
 	}
@@ -880,6 +896,24 @@ func TestInitializeMetadataOnly(t *testing.T) {
 
 	if _, ok := src.(sources.MetadataSource); !ok {
 		t.Errorf("expected source to be sources.MetadataSource, got %T", src)
+	}
+
+	authSvc, ok := authServicesMap["test-auth"]
+	if !ok {
+		t.Fatalf("expected auth service 'test-auth' in map")
+	}
+
+	if _, ok := authSvc.(auth.MetadataAuthService); !ok {
+		t.Errorf("expected auth service to be auth.MetadataAuthService, got %T", authSvc)
+	}
+
+	model, ok := embeddingModelsMap["test-model"]
+	if !ok {
+		t.Fatalf("expected embedding model 'test-model' in map")
+	}
+
+	if _, ok := model.(embeddingmodels.MetadataEmbeddingModel); !ok {
+		t.Errorf("expected embedding model to be embeddingmodels.MetadataEmbeddingModel, got %T", model)
 	}
 }
 

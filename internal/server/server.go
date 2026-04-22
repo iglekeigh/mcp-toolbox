@@ -121,6 +121,9 @@ func InitializeConfigs(ctx context.Context, cfg ServerConfig) (
 	authServicesMap := make(map[string]auth.AuthService)
 	for name, sc := range cfg.AuthServiceConfigs {
 		a, err := func() (auth.AuthService, error) {
+			if cfg.MetadataOnly {
+				return auth.MetadataAuthService{Config: sc}, nil
+			}
 			_, span := instrumentation.Tracer.Start(
 				ctx,
 				"toolbox/server/auth/init",
@@ -149,6 +152,9 @@ func InitializeConfigs(ctx context.Context, cfg ServerConfig) (
 	embeddingModelsMap := make(map[string]embeddingmodels.EmbeddingModel)
 	for name, ec := range cfg.EmbeddingModelConfigs {
 		em, err := func() (embeddingmodels.EmbeddingModel, error) {
+			if cfg.MetadataOnly {
+				return embeddingmodels.MetadataEmbeddingModel{Config: ec}, nil
+			}
 			_, span := instrumentation.Tracer.Start(
 				ctx,
 				"toolbox/server/embeddingmodel/init",

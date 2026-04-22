@@ -32,6 +32,23 @@ type EmbeddingModel interface {
 	EmbedParameters(context.Context, []string) ([][]float32, error)
 }
 
+// MetadataEmbeddingModel is a metadata-only implementation of EmbeddingModel.
+type MetadataEmbeddingModel struct {
+	Config EmbeddingModelConfig
+}
+
+func (s MetadataEmbeddingModel) EmbeddingModelType() string {
+	return s.Config.EmbeddingModelConfigType()
+}
+
+func (s MetadataEmbeddingModel) ToConfig() EmbeddingModelConfig {
+	return s.Config
+}
+
+func (s MetadataEmbeddingModel) EmbedParameters(context.Context, []string) ([][]float32, error) {
+	return nil, nil
+}
+
 type VectorFormatter func(vectorFloats []float32) any
 
 // FormatVectorForPgvector converts a slice of floats into a PostgreSQL vector literal string: '[x, y, z]'

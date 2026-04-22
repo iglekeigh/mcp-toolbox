@@ -32,3 +32,24 @@ type AuthService interface {
 	GetClaimsFromHeader(context.Context, http.Header) (map[string]any, error)
 	ToConfig() AuthServiceConfig
 }
+
+// MetadataAuthService is a metadata-only implementation of AuthService.
+type MetadataAuthService struct {
+	Config AuthServiceConfig
+}
+
+func (s MetadataAuthService) AuthServiceType() string {
+	return s.Config.AuthServiceConfigType()
+}
+
+func (s MetadataAuthService) GetName() string {
+	return ""
+}
+
+func (s MetadataAuthService) GetClaimsFromHeader(context.Context, http.Header) (map[string]any, error) {
+	return nil, nil
+}
+
+func (s MetadataAuthService) ToConfig() AuthServiceConfig {
+	return s.Config
+}
