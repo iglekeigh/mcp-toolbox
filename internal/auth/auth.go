@@ -35,6 +35,7 @@ type AuthService interface {
 
 // MetadataAuthService is a metadata-only implementation of AuthService.
 type MetadataAuthService struct {
+	Name   string
 	Config AuthServiceConfig
 }
 
