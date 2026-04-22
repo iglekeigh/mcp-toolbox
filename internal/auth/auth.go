@@ -44,7 +44,7 @@ func (s MetadataAuthService) AuthServiceType() string {
 }
 
 func (s MetadataAuthService) GetName() string {
-	return ""
+	return s.Name
 }
 
 func (s MetadataAuthService) GetClaimsFromHeader(context.Context, http.Header) (map[string]any, error) {
