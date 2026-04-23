@@ -56,13 +56,11 @@ func TestMetadataSource(t *testing.T) {
 		t.Errorf("expected GetAuthTokenHeaderName() to be 'Authorization', got %q", src.GetAuthTokenHeaderName())
 	}
 
-	res, err := src.Query(context.Background(), "SELECT 1")
-	if err != nil || res != nil {
-		t.Errorf("expected Query to return (nil, nil), got (%v, %v)", res, err)
+	if _, err := src.Query(context.Background(), "SELECT 1"); err == nil {
+		t.Error("expected Query to return an error in metadata-only mode")
 	}
 
-	res2, err := src.RunSQL(context.Background(), "SELECT 1", nil)
-	if err != nil || res2 != nil {
-		t.Errorf("expected RunSQL to return (nil, nil), got (%v, %v)", res2, err)
+	if _, err := src.RunSQL(context.Background(), "SELECT 1", nil); err == nil {
+		t.Error("expected RunSQL to return an error in metadata-only mode")
 	}
 }
