@@ -916,4 +916,3 @@ func TestInitializeMetadataOnly(t *testing.T) {
 		t.Errorf("expected embedding model to be embeddingmodels.MetadataEmbeddingModel, got %T", model)
 	}
 }
-
