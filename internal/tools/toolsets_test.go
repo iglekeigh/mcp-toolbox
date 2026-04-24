@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
 	"github.com/googleapis/mcp-toolbox/internal/tools"
 	"github.com/googleapis/mcp-toolbox/internal/util/parameters"
@@ -190,7 +191,7 @@ func TestToolsetConfig_Initialize(t *testing.T) {
 					t.Errorf("Initialize() error mismatch:\n  want to contain: %q\n  got: %q", tc.wantErr, err.Error())
 				}
 				// Also check that the partially populated struct matches
-				if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(testutils.MockTool{})); diff != "" {
+				if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(testutils.MockTool{}), cmpopts.IgnoreUnexported(tools.Toolset{})); diff != "" {
 					t.Errorf("Initialize() partial result on error mismatch (-want +got):\n%s", diff)
 				}
 			} else {
@@ -198,7 +199,7 @@ func TestToolsetConfig_Initialize(t *testing.T) {
 					t.Fatalf("Initialize() returned unexpected error: %v", err)
 				}
 				// Using cmp.AllowUnexported because MockTool is unexported
-				if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(testutils.MockTool{})); diff != "" {
+				if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(testutils.MockTool{}), cmpopts.IgnoreUnexported(tools.Toolset{})); diff != "" {
 					t.Errorf("Initialize() result mismatch (-want +got):\n%s", diff)
 				}
 			}
