@@ -55,7 +55,7 @@ func main() {
 	}
 
 	// Set up the Gemini Model
-	model, err := gemini.NewModel(ctx, "gemini-3pro-preview", &genai.ClientConfig{
+	model, err := gemini.NewModel(ctx, "gemini-3-pro-preview", &genai.ClientConfig{
 		APIKey: genaiKey,
 	})
 	if err != nil {
