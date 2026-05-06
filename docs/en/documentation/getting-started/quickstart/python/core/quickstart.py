@@ -64,7 +64,7 @@ async def main():
             history.append(user_prompt_content)
 
             response = genai_client.models.generate_content(
-                model="gemini-3pro-preview",
+                model="gemini-2.5-flash",
                 contents=history,
                 config=GenerateContentConfig(
                     system_instruction=prompt,
@@ -96,7 +96,7 @@ async def main():
                 history.append(tool_response_content)
 
                 response2 = genai_client.models.generate_content(
-                    model="gemini-3pro-preview",
+                    model="gemini-2.5-flash",
                     contents=history,
                     config=GenerateContentConfig(
                         tools=genai_tools,
