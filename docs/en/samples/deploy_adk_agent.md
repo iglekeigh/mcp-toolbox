@@ -108,7 +108,7 @@ Since Cloud Run services are secured by default, you also need to provide a work
 
     root_agent = Agent(
         name='root_agent',
-        model='gemini-2.5-flash',
+        model='gemini-3-pro-preview',
         instruction="You are a helpful AI assistant designed to provide accurate and useful information.",
         tools=[toolset],
     )
