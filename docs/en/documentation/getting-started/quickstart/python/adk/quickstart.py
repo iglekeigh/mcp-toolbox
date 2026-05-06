@@ -24,7 +24,7 @@ toolset = ToolboxToolset(
 
 root_agent = Agent(
     name='hotel_assistant',
-    model='gemini-3-pro-preview',
+    model='gemini-3-flash-preview',
     instruction=prompt,
     tools=[toolset],
 )
