@@ -26,7 +26,11 @@ ignoreFiles = ["quickstart/shared", "quickstart/python", "quickstart/js", "quick
 
 [security.node]
   [security.node.permissions]
-    disable = true
+    allowRead = [".", "/tmp/hugo_cache_runner"] 
+    allowWrite = ["."]
+    allowChildProcess = ["tailwindcss", "postcss"]
+    allowAddons = ["tailwindcss", "postcss"]
+    disable = false
 
 [languages]
   [languages.en]
