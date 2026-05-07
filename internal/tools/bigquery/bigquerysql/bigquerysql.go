@@ -192,33 +192,37 @@ func buildQueryParameters(paramsMetadata parameters.Parameters, paramsMap map[st
 		isNull := value == nil
 
 		if isNull {
-			switch p.GetType() {
-			case parameters.TypeString:
-				finalValue = bigqueryapi.NullString{Valid: false}
-			case parameters.TypeInt:
-				finalValue = bigqueryapi.NullInt64{Valid: false}
-			case parameters.TypeFloat:
-				finalValue = bigqueryapi.NullFloat64{Valid: false}
-			case parameters.TypeBool:
-				finalValue = bigqueryapi.NullBool{Valid: false}
-			case parameters.TypeArray:
-				// For arrays, provide a typed nil slice based on items type.
-				if arrayParam, ok := p.(*parameters.ArrayParameter); ok {
-					switch arrayParam.GetItems().GetType() {
-					case parameters.TypeString:
-						finalValue = []string(nil)
-					case parameters.TypeInt:
-						finalValue = []int64(nil)
-					case parameters.TypeFloat:
-						finalValue = []float64(nil)
-					case parameters.TypeBool:
-						finalValue = []bool(nil)
-					default:
-						finalValue = []any(nil)
+			if p.GetEmbeddedBy() != "" {
+				finalValue = []float64(nil)
+			} else {
+				switch p.GetType() {
+				case parameters.TypeString:
+					finalValue = bigqueryapi.NullString{Valid: false}
+				case parameters.TypeInt:
+					finalValue = bigqueryapi.NullInt64{Valid: false}
+				case parameters.TypeFloat:
+					finalValue = bigqueryapi.NullFloat64{Valid: false}
+				case parameters.TypeBool:
+					finalValue = bigqueryapi.NullBool{Valid: false}
+				case parameters.TypeArray:
+					// For arrays, provide a typed nil slice based on items type.
+					if arrayParam, ok := p.(*parameters.ArrayParameter); ok {
+						switch arrayParam.GetItems().GetType() {
+						case parameters.TypeString:
+							finalValue = []string(nil)
+						case parameters.TypeInt:
+							finalValue = []int64(nil)
+						case parameters.TypeFloat:
+							finalValue = []float64(nil)
+						case parameters.TypeBool:
+							finalValue = []bool(nil)
+						default:
+							finalValue = []any(nil)
+						}
 					}
+				case parameters.TypeMap:
+					finalValue = map[string]any(nil)
 				}
-			case parameters.TypeMap:
-				finalValue = map[string]any(nil)
 			}
 		}
 
@@ -239,12 +243,21 @@ func buildQueryParameters(paramsMetadata parameters.Parameters, paramsMap map[st
 			lowLevelParam.ParameterValue.NullFields = []string{"Value"}
 		}
 
+		// Check if this parameter is an array type.
+		// It is an array if its metadata type is Array, or if it is used for embedding,
+		var isArray bool
+		var itemType = "FLOAT64" // Default to FLOAT64 for embeddings
 		if arrayParam, ok := p.(*parameters.ArrayParameter); ok {
-			lowLevelParam.ParameterType.Type = "ARRAY"
-			itemType, err := bqutil.BQTypeStringFromToolType(arrayParam.GetItems().GetType())
-			if err != nil {
-				return nil, nil, util.NewAgentError(fmt.Sprintf("unable to get BigQuery type for parameter %q", name), err)
+			isArray = true
+			if bqType, err := bqutil.BQTypeStringFromToolType(arrayParam.GetItems().GetType()); err == nil {
+				itemType = bqType
 			}
+		} else if p.GetEmbeddedBy() != "" {
+			isArray = true
+		}
+
+		if isArray {
+			lowLevelParam.ParameterType.Type = "ARRAY"
 			lowLevelParam.ParameterType.ArrayType = &bigqueryrestapi.QueryParameterType{Type: itemType}
 
 			if !isNull {

@@ -229,7 +229,7 @@ func TestBuildQueryParameters(t *testing.T) {
 		"opt_string": "hello",
 	}
 	gotHighFull, gotLowFull, _ := buildQueryParameters(paramsMetadata, paramsMapFull, statement)
-	
+
 	if gotHighFull[0].Value != "hello" {
 		t.Errorf("Expected string value 'hello', got %v", gotHighFull[0].Value)
 	}
