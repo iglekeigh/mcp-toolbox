@@ -202,3 +202,7 @@ FROM INFORMATION_SCHEMA.PROPERTY_GRAPHS PG
 WHERE 
 	EXISTS (SELECT 1 FROM FilterGraphNames WHERE FilterGraphNames.GRAPH_NAME = '%') OR PG.PROPERTY_GRAPH_NAME IN (SELECT GRAPH_NAME FROM FilterGraphNames)
 `
+
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+	return cfg.Initialize(nil)
+}

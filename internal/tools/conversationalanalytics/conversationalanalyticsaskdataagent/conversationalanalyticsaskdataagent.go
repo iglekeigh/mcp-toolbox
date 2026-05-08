@@ -139,6 +139,35 @@ func (cfg Config) Initialize(srcs map[string]sources.Source) (tools.Tool, error)
 	return t, nil
 }
 
+// ManifestOnly returns a Tool populated with manifest data only.
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+	// verify source exists
+
+	// verify the source is compatible
+
+	if cfg.Location == "" {
+		cfg.Location = "global"
+	}
+	if cfg.MaxResults <= 0 {
+		cfg.MaxResults = 50
+	}
+
+	dataAgentIdDescription := `The ID of the data agent to ask.`
+	userQueryParameter := parameters.NewStringParameter("user_query_with_context", "The question to ask the agent, potentially including conversation history for context.")
+	dataAgentIdParameter := parameters.NewStringParameter("data_agent_id", dataAgentIdDescription)
+	params := parameters.Parameters{dataAgentIdParameter, userQueryParameter}
+	mcpManifest := tools.GetMcpManifest(cfg.Name, cfg.Description, cfg.AuthRequired, params, nil)
+
+	// finish tool setup
+	t := Tool{
+		Config:      cfg,
+		Parameters:  params,
+		manifest:    tools.Manifest{Description: cfg.Description, Parameters: params.Manifest(), AuthRequired: cfg.AuthRequired},
+		mcpManifest: mcpManifest,
+	}
+	return t, nil
+}
+
 // validate interface
 var _ tools.Tool = Tool{}
 

@@ -112,6 +112,42 @@ func (cfg Config) Initialize(srcs map[string]sources.Source) (tools.Tool, error)
 	}, nil
 }
 
+// ManifestOnly returns a Tool populated with manifest data only.
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+
+	project := ""
+	var targetProjectParam parameters.Parameter
+	if project != "" {
+		targetProjectParam = parameters.NewStringParameterWithDefault("target_project", project, "The GCP project ID. This is pre-configured; do not ask for it unless the user explicitly provides a different one.")
+	} else {
+		targetProjectParam = parameters.NewStringParameter("target_project", "The project ID")
+	}
+
+	allParameters := parameters.Parameters{
+		targetProjectParam,
+		parameters.NewStringParameter("target_instance", "Cloud SQL instance ID of the target instance. This does not include the project ID."),
+		parameters.NewStringParameter("backup_id", "Identifier of the backup being restored. Can be a BackupRun ID, backup name, or BackupDR backup name. Use the full backup ID as provided, do not try to parse it"),
+		parameters.NewStringParameterWithRequired("source_project", "GCP project ID of the instance that the backup belongs to. Only required if the backup_id is a BackupRun ID.", false),
+		parameters.NewStringParameterWithRequired("source_instance", "Cloud SQL instance ID of the instance that the backup belongs to. Only required if the backup_id is a BackupRun ID.", false),
+	}
+	paramManifest := allParameters.Manifest()
+
+	description := cfg.Description
+	if description == "" {
+		description = "Restores a backup on a Cloud SQL instance."
+	}
+
+	annotations := tools.GetAnnotationsOrDefault(cfg.Annotations, tools.NewDestructiveAnnotations)
+	mcpManifest := tools.GetMcpManifest(cfg.Name, description, cfg.AuthRequired, allParameters, annotations)
+
+	return Tool{
+		Config:      cfg,
+		AllParams:   allParameters,
+		manifest:    tools.Manifest{Description: description, Parameters: paramManifest, AuthRequired: cfg.AuthRequired},
+		mcpManifest: mcpManifest,
+	}, nil
+}
+
 // Tool represents the restore-backup tool.
 type Tool struct {
 	Config

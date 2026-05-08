@@ -140,6 +140,50 @@ func (cfg Config) Initialize(srcs map[string]sources.Source) (tools.Tool, error)
 	return t, nil
 }
 
+// ManifestOnly returns a Tool populated with manifest data only.
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+	// verify source exists
+
+	// verify the source is compatible
+
+	params := parameters.Parameters{
+		parameters.NewStringParameterWithDefault(activeKey, "", "Whether the patient record is active. Use true or false"),
+		parameters.NewStringParameterWithDefault(cityKey, "", "The city of the patient's address"),
+		parameters.NewStringParameterWithDefault(countryKey, "", "The country of the patient's address"),
+		parameters.NewStringParameterWithDefault(postalCodeKey, "", "The postal code of the patient's address"),
+		parameters.NewStringParameterWithDefault(stateKey, "", "The state of the patient's address"),
+		parameters.NewStringParameterWithDefault(addressSubstringKey, "", "A substring to search for in any address field"),
+		parameters.NewStringParameterWithDefault(birthDateRangeKey, "", "A date range for the patient's birthdate in the format YYYY-MM-DD/YYYY-MM-DD. Omit the first or second date to indicate open-ended ranges (e.g. '/2000-01-01' or '1950-01-01/')"),
+		parameters.NewStringParameterWithDefault(deathDateRangeKey, "", "A date range for the patient's death date in the format YYYY-MM-DD/YYYY-MM-DD. Omit the first or second date to indicate open-ended ranges (e.g. '/2000-01-01' or '1950-01-01/')"),
+		parameters.NewStringParameterWithDefault(deceasedKey, "", "Whether the patient is deceased. Use true or false"),
+		parameters.NewStringParameterWithDefault(emailKey, "", "The patient's email address"),
+		parameters.NewStringParameterWithDefault(genderKey, "", "The patient's gender. Must be one of 'male', 'female', 'other', or 'unknown'"),
+		parameters.NewStringParameterWithDefault(addressUseKey, "", "The use of the patient's address. Must be one of 'home', 'work', 'temp', 'old', or 'billing'"),
+		parameters.NewStringParameterWithDefault(nameKey, "", "The patient's name. Can be a family name, given name, or both"),
+		parameters.NewStringParameterWithDefault(givenNameKey, "", "A portion of the given name of the patient"),
+		parameters.NewStringParameterWithDefault(familyNameKey, "", "A portion of the family name of the patient"),
+		parameters.NewStringParameterWithDefault(phoneKey, "", "The patient's phone number"),
+		parameters.NewStringParameterWithDefault(languageKey, "", "The patient's preferred language. Must be a valid BCP-47 code (e.g. 'en-US', 'es')"),
+		parameters.NewStringParameterWithDefault(identifierKey, "", "An identifier for the patient"),
+		parameters.NewBooleanParameterWithDefault(summaryKey, true, "Requests the server to return a subset of the resource. Return a limited subset of elements from the resource. Enabled by default to reduce response size. Use get-fhir-resource tool to get full resource details (preferred) or set to false to disable."),
+	}
+
+	if len(map[string]struct{}{}) != 1 {
+		params = append(params, parameters.NewStringParameter(common.StoreKey, "The FHIR store ID to retrieve the resource from."))
+	}
+	annotations := tools.GetAnnotationsOrDefault(cfg.Annotations, tools.NewReadOnlyAnnotations)
+	mcpManifest := tools.GetMcpManifest(cfg.Name, cfg.Description, cfg.AuthRequired, params, annotations)
+
+	// finish tool setup
+	t := Tool{
+		Config:      cfg,
+		Parameters:  params,
+		manifest:    tools.Manifest{Description: cfg.Description, Parameters: params.Manifest(), AuthRequired: cfg.AuthRequired},
+		mcpManifest: mcpManifest,
+	}
+	return t, nil
+}
+
 // validate interface
 var _ tools.Tool = Tool{}
 

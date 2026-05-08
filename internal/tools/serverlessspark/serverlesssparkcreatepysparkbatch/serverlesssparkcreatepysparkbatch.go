@@ -90,3 +90,7 @@ func (b *PySparkBatchBuilder) BuildBatch(params parameters.ParamValues) (*datapr
 
 	return batch, nil
 }
+
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+	return cfg.Initialize(nil)
+}

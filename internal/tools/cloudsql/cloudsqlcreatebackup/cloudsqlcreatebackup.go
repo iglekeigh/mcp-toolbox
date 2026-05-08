@@ -112,6 +112,42 @@ func (cfg Config) Initialize(srcs map[string]sources.Source) (tools.Tool, error)
 	}, nil
 }
 
+// ManifestOnly returns a Tool populated with manifest data only.
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+
+	project := ""
+	var projectParam parameters.Parameter
+	if project != "" {
+		projectParam = parameters.NewStringParameterWithDefault("project", project, "The GCP project ID. This is pre-configured; do not ask for it unless the user explicitly provides a different one.")
+	} else {
+		projectParam = parameters.NewStringParameter("project", "The project ID")
+	}
+
+	allParameters := parameters.Parameters{
+		projectParam,
+		parameters.NewStringParameter("instance", "Cloud SQL instance ID. This does not include the project ID."),
+		// Location and backup_description are optional.
+		parameters.NewStringParameterWithRequired("location", "Location of the backup run.", false),
+		parameters.NewStringParameterWithRequired("backup_description", "The description of this backup run.", false),
+	}
+	paramManifest := allParameters.Manifest()
+
+	description := cfg.Description
+	if description == "" {
+		description = "Creates a backup on a Cloud SQL instance."
+	}
+
+	annotations := tools.GetAnnotationsOrDefault(cfg.Annotations, tools.NewDestructiveAnnotations)
+	mcpManifest := tools.GetMcpManifest(cfg.Name, description, cfg.AuthRequired, allParameters, annotations)
+
+	return Tool{
+		Config:      cfg,
+		AllParams:   allParameters,
+		manifest:    tools.Manifest{Description: description, Parameters: paramManifest, AuthRequired: cfg.AuthRequired},
+		mcpManifest: mcpManifest,
+	}, nil
+}
+
 // Tool represents the create-backup tool.
 type Tool struct {
 	Config

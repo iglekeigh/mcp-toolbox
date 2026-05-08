@@ -169,3 +169,7 @@ func (t Tool) GetAuthTokenHeaderName(_ tools.SourceProvider) (string, error) {
 func (t Tool) GetParameters() parameters.Parameters {
 	return t.Parameters
 }
+
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+	return cfg.Initialize(nil)
+}

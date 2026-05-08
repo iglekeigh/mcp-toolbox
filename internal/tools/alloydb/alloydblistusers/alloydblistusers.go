@@ -186,3 +186,25 @@ func (t Tool) GetAuthTokenHeaderName(resourceMgr tools.SourceProvider) (string, 
 func (t Tool) GetParameters() parameters.Parameters {
 	return t.AllParams
 }
+
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+	projectParam := parameters.NewStringParameter("project", "The GCP project ID.")
+	allParameters := parameters.Parameters{
+		projectParam,
+		parameters.NewStringParameter("location", "The location of the cluster (e.g., 'us-central1')."),
+		parameters.NewStringParameter("cluster", "The ID of the cluster to list users from."),
+	}
+	paramManifest := allParameters.Manifest()
+	description := cfg.Description
+	if description == "" {
+		description = "Lists all AlloyDB users in a given project, location and cluster."
+	}
+	annotations := tools.GetAnnotationsOrDefault(cfg.Annotations, tools.NewReadOnlyAnnotations)
+	mcpManifest := tools.GetMcpManifest(cfg.Name, description, cfg.AuthRequired, allParameters, annotations)
+	return Tool{
+		Config:      cfg,
+		AllParams:   allParameters,
+		manifest:    tools.Manifest{Description: description, Parameters: paramManifest, AuthRequired: cfg.AuthRequired},
+		mcpManifest: mcpManifest,
+	}, nil
+}

@@ -192,3 +192,21 @@ func (t Tool) GetAuthTokenHeaderName(resourceMgr tools.SourceProvider) (string, 
 func (t Tool) GetParameters() parameters.Parameters {
 	return t.Parameters
 }
+
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+	params := parameters.Parameters{
+		parameters.NewStringParameter(studyInstanceUIDKey, "The UID of the DICOM study"),
+		parameters.NewStringParameter(seriesInstanceUIDKey, "The UID of the DICOM series"),
+		parameters.NewStringParameter(sopInstanceUIDKey, "The UID of the SOP instance."),
+		parameters.NewIntParameterWithDefault(frameNumberKey, 1, "The frame number to retrieve (1-based). Only applicable to multi-frame instances."),
+		parameters.NewStringParameter(common.StoreKey, "The DICOM store ID to get details for."),
+	}
+	annotations := tools.GetAnnotationsOrDefault(cfg.Annotations, tools.NewReadOnlyAnnotations)
+	mcpManifest := tools.GetMcpManifest(cfg.Name, cfg.Description, cfg.AuthRequired, params, annotations)
+	return Tool{
+		Config:      cfg,
+		Parameters:  params,
+		manifest:    tools.Manifest{Description: cfg.Description, Parameters: params.Manifest(), AuthRequired: cfg.AuthRequired},
+		mcpManifest: mcpManifest,
+	}, nil
+}

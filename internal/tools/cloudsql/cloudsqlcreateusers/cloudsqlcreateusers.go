@@ -110,6 +110,41 @@ func (cfg Config) Initialize(srcs map[string]sources.Source) (tools.Tool, error)
 	}, nil
 }
 
+// ManifestOnly returns a Tool populated with manifest data only.
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+
+	project := ""
+	var projectParam parameters.Parameter
+	if project != "" {
+		projectParam = parameters.NewStringParameterWithDefault("project", project, "The GCP project ID. This is pre-configured; do not ask for it unless the user explicitly provides a different one.")
+	} else {
+		projectParam = parameters.NewStringParameter("project", "The project ID")
+	}
+
+	allParameters := parameters.Parameters{
+		projectParam,
+		parameters.NewStringParameter("instance", "The ID of the instance where the user will be created."),
+		parameters.NewStringParameter("name", "The name for the new user. Must be unique within the instance."),
+		parameters.NewStringParameterWithRequired("password", "A secure password for the new user. Not required for IAM users.", false),
+		parameters.NewBooleanParameter("iamUser", "Set to true to create a Cloud IAM user."),
+	}
+	paramManifest := allParameters.Manifest()
+
+	description := cfg.Description
+	if description == "" {
+		description = "Creates a new user in a Cloud SQL instance. Both built-in and IAM users are supported. IAM users require an email account as the user name. IAM is the more secure and recommended way to manage users. The agent should always ask the user what type of user they want to create. For more information, see https://cloud.google.com/sql/docs/postgres/add-manage-iam-users"
+	}
+	annotations := tools.GetAnnotationsOrDefault(cfg.Annotations, tools.NewDestructiveAnnotations)
+	mcpManifest := tools.GetMcpManifest(cfg.Name, description, cfg.AuthRequired, allParameters, annotations)
+
+	return Tool{
+		Config:      cfg,
+		AllParams:   allParameters,
+		manifest:    tools.Manifest{Description: cfg.Description, Parameters: paramManifest, AuthRequired: cfg.AuthRequired},
+		mcpManifest: mcpManifest,
+	}, nil
+}
+
 // Tool represents the create-user tool.
 type Tool struct {
 	Config

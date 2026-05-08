@@ -25,7 +25,6 @@ import (
 
 	"github.com/googleapis/mcp-toolbox/cmd/internal"
 	"github.com/googleapis/mcp-toolbox/internal/server"
-	"github.com/googleapis/mcp-toolbox/internal/server/resources"
 	"github.com/googleapis/mcp-toolbox/internal/tools"
 
 	"github.com/spf13/cobra"
@@ -227,13 +226,11 @@ func run(cmd *skillsCmd, opts *internal.ToolboxOptions) error {
 }
 
 func (c *skillsCmd) collectTools(ctx context.Context, opts *internal.ToolboxOptions) (map[string]map[string]tools.Tool, error) {
-	// Initialize Resources
-	sourcesMap, authServicesMap, embeddingModelsMap, toolsMap, toolsetsMap, promptsMap, promptsetsMap, err := server.InitializeConfigs(ctx, opts.Cfg)
+	// Initialize tools and toolsets from config without connecting to sources
+	toolsMap, toolsetsMap, err := server.InitializeToolsAndToolsets(ctx, opts.Cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize resources: %w", err)
+		return nil, fmt.Errorf("failed to initialize tool manifests: %w", err)
 	}
-
-	resourceMgr := resources.NewResourceManager(sourcesMap, authServicesMap, embeddingModelsMap, toolsMap, toolsetsMap, promptsMap, promptsetsMap)
 
 	skillsToTools := make(map[string]map[string]tools.Tool)
 
@@ -249,7 +246,7 @@ func (c *skillsCmd) collectTools(ctx context.Context, opts *internal.ToolboxOpti
 	}
 
 	if c.toolset != "" {
-		ts, ok := resourceMgr.GetToolset(c.toolset)
+		ts, ok := toolsetsMap[c.toolset]
 		if !ok {
 			return nil, fmt.Errorf("toolset %q not found", c.toolset)
 		}
@@ -259,7 +256,7 @@ func (c *skillsCmd) collectTools(ctx context.Context, opts *internal.ToolboxOpti
 	}
 
 	if len(toolsetsMap) <= 1 {
-		// Default to all tools if no toolset found
+		// Default to all tools if no named toolset found
 		skillsToTools[c.name] = toolsMap
 		return skillsToTools, nil
 	}

@@ -145,6 +145,67 @@ func (cfg Config) Initialize(srcs map[string]sources.Source) (tools.Tool, error)
 	return t, nil
 }
 
+// ManifestOnly returns a Tool populated with manifest data only.
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+	// verify source exists
+
+	// verify the source is compatible
+
+	allowedDatasets := []string{}
+	inputDataDescription := "The data that contain the test and control data to analyze. Can be a fully qualified BigQuery table ID or a SQL query."
+	if len(allowedDatasets) > 0 {
+		datasetIDs := []string{}
+		for _, ds := range allowedDatasets {
+			datasetIDs = append(datasetIDs, fmt.Sprintf("`%s`", ds))
+		}
+		inputDataDescription += fmt.Sprintf(" The query or table must only access datasets from the following list: %s.", strings.Join(datasetIDs, ", "))
+	}
+
+	inputDataParameter := parameters.NewStringParameter("input_data", inputDataDescription)
+	contributionMetricParameter := parameters.NewStringParameter("contribution_metric",
+		`The name of the column that contains the metric to analyze.
+		Provides the expression to use to calculate the metric you are analyzing.
+		To calculate a summable metric, the expression must be in the form SUM(metric_column_name),
+		where metric_column_name is a numeric data type.
+
+		To calculate a summable ratio metric, the expression must be in the form
+		SUM(numerator_metric_column_name)/SUM(denominator_metric_column_name),
+		where numerator_metric_column_name and denominator_metric_column_name are numeric data types.
+
+		To calculate a summable by category metric, the expression must be in the form
+		SUM(metric_sum_column_name)/COUNT(DISTINCT categorical_column_name). The summed column must be a numeric data type.
+		The categorical column must have type BOOL, DATE, DATETIME, TIME, TIMESTAMP, STRING, or INT64.`)
+	isTestColParameter := parameters.NewStringParameter("is_test_col",
+		"The name of the column that identifies whether a row is in the test or control group.")
+	dimensionIDColsParameter := parameters.NewArrayParameterWithRequired("dimension_id_cols",
+		"An array of column names that uniquely identify each dimension.", false, parameters.NewStringParameter("dimension_id_col", "A dimension column name."))
+	topKInsightsParameter := parameters.NewIntParameterWithDefault("top_k_insights_by_apriori_support", 30,
+		"The number of top insights to return, ranked by apriori support.")
+	pruningMethodParameter := parameters.NewStringParameterWithDefault("pruning_method", "PRUNE_REDUNDANT_INSIGHTS",
+		"The method to use for pruning redundant insights. Can be 'NO_PRUNING' or 'PRUNE_REDUNDANT_INSIGHTS'.")
+
+	params := parameters.Parameters{
+		inputDataParameter,
+		contributionMetricParameter,
+		isTestColParameter,
+		dimensionIDColsParameter,
+		topKInsightsParameter,
+		pruningMethodParameter,
+	}
+
+	annotations := tools.GetAnnotationsOrDefault(cfg.Annotations, tools.NewReadOnlyAnnotations)
+	mcpManifest := tools.GetMcpManifest(cfg.Name, cfg.Description, cfg.AuthRequired, params, annotations)
+
+	// finish tool setup
+	t := Tool{
+		Config:      cfg,
+		Parameters:  params,
+		manifest:    tools.Manifest{Description: cfg.Description, Parameters: params.Manifest(), AuthRequired: cfg.AuthRequired},
+		mcpManifest: mcpManifest,
+	}
+	return t, nil
+}
+
 // validate interface
 var _ tools.Tool = Tool{}
 

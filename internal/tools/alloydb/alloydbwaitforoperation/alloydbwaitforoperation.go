@@ -196,6 +196,76 @@ func (cfg Config) Initialize(srcs map[string]sources.Source) (tools.Tool, error)
 	}, nil
 }
 
+// ManifestOnly returns a Tool populated with manifest data only.
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+
+	project := ""
+	var projectParam parameters.Parameter
+	if project != "" {
+		projectParam = parameters.NewStringParameterWithDefault("project", project, "The GCP project ID. This is pre-configured; do not ask for it unless the user explicitly provides a different one.")
+	} else {
+		projectParam = parameters.NewStringParameter("project", "The project ID")
+	}
+
+	allParameters := parameters.Parameters{
+		projectParam,
+		parameters.NewStringParameter("location", "The location ID"),
+		parameters.NewStringParameter("operation", "The operation ID"),
+	}
+	paramManifest := allParameters.Manifest()
+
+	description := cfg.Description
+	if description == "" {
+		description = "This will poll on operations API until the operation is done. For checking operation status we need projectId, locationID and operationId. Once instance is created give follow up steps on how to use the variables to bring data plane MCP server up in local and remote setup."
+	}
+
+	annotations := tools.GetAnnotationsOrDefault(cfg.Annotations, tools.NewReadOnlyAnnotations)
+	mcpManifest := tools.GetMcpManifest(cfg.Name, description, cfg.AuthRequired, allParameters, annotations)
+
+	var delay time.Duration
+	if cfg.Delay == "" {
+		delay = 3 * time.Second
+	} else {
+		var err error
+		delay, err = time.ParseDuration(cfg.Delay)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value for delay: %w", err)
+		}
+	}
+
+	var maxDelay time.Duration
+	if cfg.MaxDelay == "" {
+		maxDelay = 4 * time.Minute
+	} else {
+		var err error
+		maxDelay, err = time.ParseDuration(cfg.MaxDelay)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value for maxDelay: %w", err)
+		}
+	}
+
+	multiplier := cfg.Multiplier
+	if multiplier == 0 {
+		multiplier = 2.0
+	}
+
+	maxRetries := cfg.MaxRetries
+	if maxRetries == 0 {
+		maxRetries = 10
+	}
+
+	return Tool{
+		Config:      cfg,
+		AllParams:   allParameters,
+		manifest:    tools.Manifest{Description: description, Parameters: paramManifest, AuthRequired: cfg.AuthRequired},
+		mcpManifest: mcpManifest,
+		Delay:       delay,
+		MaxDelay:    maxDelay,
+		Multiplier:  multiplier,
+		MaxRetries:  maxRetries,
+	}, nil
+}
+
 // Tool represents the wait-for-operation tool.
 type Tool struct {
 	Config

@@ -128,6 +128,38 @@ func (cfg Config) Initialize(srcs map[string]sources.Source) (tools.Tool, error)
 	}, nil
 }
 
+// ManifestOnly returns a Tool populated with manifest data only.
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+	// Create a slice for all parameters
+	allParameters := slices.Concat(cfg.PathParams, cfg.QueryParams, cfg.BodyParams, cfg.HeaderParams)
+
+	// Verify no duplicate parameter names
+	err := parameters.CheckDuplicateParameters(allParameters)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create Toolbox manifest
+	paramManifest := allParameters.Manifest()
+
+	if paramManifest == nil {
+		paramManifest = make([]parameters.ParameterManifest, 0)
+	}
+
+	// Create MCP manifest
+	annotations := tools.GetAnnotationsOrDefault(cfg.Annotations, tools.NewDestructiveAnnotations)
+	mcpManifest := tools.GetMcpManifest(cfg.Name, cfg.Description, cfg.AuthRequired, allParameters, annotations)
+
+	// finish tool setup
+	return Tool{
+		Config:      cfg,
+		Headers:     cfg.Headers,
+		AllParams:   allParameters,
+		manifest:    tools.Manifest{Description: cfg.Description, Parameters: paramManifest, AuthRequired: cfg.AuthRequired},
+		mcpManifest: mcpManifest,
+	}, nil
+}
+
 // validate interface
 var _ tools.Tool = Tool{}
 

@@ -116,6 +116,41 @@ func (cfg Config) Initialize(srcs map[string]sources.Source) (tools.Tool, error)
 	return t, nil
 }
 
+// ManifestOnly returns a Tool populated with manifest data only.
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+	// verify source exists
+
+	// verify the source is compatible
+
+	defaultProjectID := ""
+	projectDescription := "The Google Cloud project ID containing the dataset and table."
+	datasetDescription := "The table's parent dataset."
+	var datasetParameter parameters.Parameter
+	var projectParameter parameters.Parameter
+
+	projectParameter, datasetParameter = bqutil.InitializeDatasetParameters(
+		[]string{},
+		defaultProjectID,
+		projectKey, datasetKey,
+		projectDescription, datasetDescription,
+	)
+
+	tableParameter := parameters.NewStringParameter(tableKey, "The table to get metadata information.")
+	params := parameters.Parameters{projectParameter, datasetParameter, tableParameter}
+
+	annotations := tools.GetAnnotationsOrDefault(cfg.Annotations, tools.NewReadOnlyAnnotations)
+	mcpManifest := tools.GetMcpManifest(cfg.Name, cfg.Description, cfg.AuthRequired, params, annotations)
+
+	// finish tool setup
+	t := Tool{
+		Config:      cfg,
+		Parameters:  params,
+		manifest:    tools.Manifest{Description: cfg.Description, Parameters: params.Manifest(), AuthRequired: cfg.AuthRequired},
+		mcpManifest: mcpManifest,
+	}
+	return t, nil
+}
+
 // validate interface
 var _ tools.Tool = Tool{}
 

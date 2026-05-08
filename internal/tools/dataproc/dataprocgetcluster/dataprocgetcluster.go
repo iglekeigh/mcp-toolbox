@@ -100,6 +100,34 @@ func (cfg Config) Initialize(srcs map[string]sources.Source) (tools.Tool, error)
 	}, nil
 }
 
+// ManifestOnly returns a Tool populated with manifest data only.
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+
+	desc := cfg.Description
+	if desc == "" {
+		desc = "Gets a Dataproc cluster"
+	}
+
+	allParameters := parameters.Parameters{
+		parameters.NewStringParameterWithRequired("clusterName", "The short name of the cluster, e.g. for \"projects/my-project/regions/us-central1/clusters/my-cluster\", pass \"my-cluster\" (the project and region are inherited from the source)", false),
+	}
+	inputSchema, _ := allParameters.McpManifest()
+
+	mcpManifest := tools.McpManifest{
+		Name:        cfg.Name,
+		Description: desc,
+		InputSchema: inputSchema,
+		Annotations: tools.NewReadOnlyAnnotations(),
+	}
+
+	return Tool{
+		Config:      cfg,
+		manifest:    tools.Manifest{Description: desc, Parameters: allParameters.Manifest()},
+		mcpManifest: mcpManifest,
+		Parameters:  allParameters,
+	}, nil
+}
+
 // Tool is the implementation of the tool.
 type Tool struct {
 	Config

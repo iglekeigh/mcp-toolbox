@@ -313,6 +313,48 @@ func InitializeConfigs(ctx context.Context, cfg ServerConfig) (
 	return sourcesMap, authServicesMap, embeddingModelsMap, toolsMap, toolsetsMap, promptsMap, promptsetsMap, nil
 }
 
+// InitializeToolsAndToolsets initializes tools and toolsets from config
+// without connecting to any sources, auth services, or embedding models.
+// It is intended for use by commands that only need tool manifest metadata
+// (e.g. skills-generate). No database connections are opened.
+func InitializeToolsAndToolsets(ctx context.Context, cfg ServerConfig) (
+	map[string]tools.Tool,
+	map[string]tools.Toolset,
+	error,
+) {
+	// initialize tools using ManifestOnly (no source connections)
+	toolsMap := make(map[string]tools.Tool)
+	for name, tc := range cfg.ToolConfigs {
+		t, err := tc.ManifestOnly()
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to initialize tool %q for manifest: %w", name, err)
+		}
+		toolsMap[name] = t
+	}
+
+	// create a default toolset that contains all tools
+	allToolNames := make([]string, 0, len(toolsMap))
+	for name := range toolsMap {
+		allToolNames = append(allToolNames, name)
+	}
+	if cfg.ToolsetConfigs == nil {
+		cfg.ToolsetConfigs = make(ToolsetConfigs)
+	}
+	cfg.ToolsetConfigs[""] = tools.ToolsetConfig{Name: "", ToolNames: allToolNames}
+
+	// initialize toolsets
+	toolsetsMap := make(map[string]tools.Toolset)
+	for name, tc := range cfg.ToolsetConfigs {
+		t, err := tc.Initialize(cfg.Version, toolsMap)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to initialize toolset %q: %w", name, err)
+		}
+		toolsetsMap[name] = t
+	}
+
+	return toolsMap, toolsetsMap, nil
+}
+
 func hostCheck(allowedHosts map[string]struct{}) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -569,3 +569,7 @@ LEFT JOIN constraints_info_cte AS CONSI
 LEFT JOIN indexes_info_cte AS II
   ON TI.TABLE_SCHEMA = II.TABLE_SCHEMA AND TI.TABLE_NAME = II.TABLE_NAME
 ORDER BY TI.TABLE_SCHEMA, TI.TABLE_NAME`
+
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+	return cfg.Initialize(nil)
+}

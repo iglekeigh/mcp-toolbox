@@ -169,6 +169,26 @@ func (cfg Config) Initialize(srcs map[string]sources.Source) (tools.Tool, error)
 	return t, nil
 }
 
+// ManifestOnly returns a Tool populated with manifest data only.
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+	allParameters := parameters.Parameters{
+		parameters.NewIntParameterWithDefault("min_duration_secs", 0, "Optional: Only show queries running for at least this long in seconds"),
+		parameters.NewIntParameterWithDefault("limit", 100, "Optional: The maximum number of rows to return."),
+	}
+	annotations := tools.GetAnnotationsOrDefault(cfg.Annotations, tools.NewReadOnlyAnnotations)
+	mcpManifest := tools.GetMcpManifest(cfg.Name, cfg.Description, cfg.AuthRequired, allParameters, annotations)
+
+	// finish tool setup
+	t := Tool{
+		Config:      cfg,
+		allParams:   allParameters,
+		manifest:    tools.Manifest{Description: cfg.Description, Parameters: allParameters.Manifest(), AuthRequired: cfg.AuthRequired},
+		mcpManifest: mcpManifest,
+		statement:   listActiveQueriesStatementMySQL, // Default statement for manifest
+	}
+	return t, nil
+}
+
 // validate interface
 var _ tools.Tool = Tool{}
 

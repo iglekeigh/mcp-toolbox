@@ -66,6 +66,10 @@ func DecodeConfig(ctx context.Context, resourceType string, name string, decoder
 type ToolConfig interface {
 	ToolConfigType() string
 	Initialize(map[string]sources.Source) (Tool, error)
+	// ManifestOnly returns a Tool populated with manifest data only
+	// (name, description, parameters). It does not require any source
+	// connections and must not attempt to look up or validate sources.
+	ManifestOnly() (Tool, error)
 }
 
 // https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations

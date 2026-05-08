@@ -124,6 +124,47 @@ func (cfg Config) Initialize(srcs map[string]sources.Source) (tools.Tool, error)
 	return t, nil
 }
 
+// ManifestOnly returns a Tool populated with manifest data only.
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+	// verify source exists
+
+	// verify the source is compatible
+
+	allowedDatasets := []string{}
+	historyDataDescription := "The table id or the query of the history time series data."
+	if len(allowedDatasets) > 0 {
+		datasetIDs := []string{}
+		for _, ds := range allowedDatasets {
+			datasetIDs = append(datasetIDs, fmt.Sprintf("`%s`", ds))
+		}
+		historyDataDescription += fmt.Sprintf(" The query or table must only access datasets from the following list: %s.", strings.Join(datasetIDs, ", "))
+	}
+
+	historyDataParameter := parameters.NewStringParameter("history_data", historyDataDescription)
+	timestampColumnNameParameter := parameters.NewStringParameter("timestamp_col",
+		"The name of the time series timestamp column.")
+	dataColumnNameParameter := parameters.NewStringParameter("data_col",
+		"The name of the time series data column.")
+	idColumnNameParameter := parameters.NewArrayParameterWithDefault("id_cols", []any{},
+		"An array of the time series id column names.",
+		parameters.NewStringParameter("id_col", "The name of time series id column."))
+	horizonParameter := parameters.NewIntParameterWithDefault("horizon", 10, "The number of forecasting steps.")
+	params := parameters.Parameters{historyDataParameter,
+		timestampColumnNameParameter, dataColumnNameParameter, idColumnNameParameter, horizonParameter}
+
+	annotations := tools.GetAnnotationsOrDefault(cfg.Annotations, tools.NewReadOnlyAnnotations)
+	mcpManifest := tools.GetMcpManifest(cfg.Name, cfg.Description, cfg.AuthRequired, params, annotations)
+
+	// finish tool setup
+	t := Tool{
+		Config:      cfg,
+		Parameters:  params,
+		manifest:    tools.Manifest{Description: cfg.Description, Parameters: params.Manifest(), AuthRequired: cfg.AuthRequired},
+		mcpManifest: mcpManifest,
+	}
+	return t, nil
+}
+
 // validate interface
 var _ tools.Tool = Tool{}
 

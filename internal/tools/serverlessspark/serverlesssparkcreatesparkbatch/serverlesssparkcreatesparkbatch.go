@@ -111,3 +111,7 @@ func (b *SparkBatchBuilder) BuildBatch(params parameters.ParamValues) (*dataproc
 		},
 	}, nil
 }
+
+func (cfg Config) ManifestOnly() (tools.Tool, error) {
+	return cfg.Initialize(nil)
+}

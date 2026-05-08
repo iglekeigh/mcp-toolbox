@@ -157,3 +157,7 @@ func (t Tool) GetAuthTokenHeaderName(resourceMgr tools.SourceProvider) (string, 
 func (t Tool) GetParameters() parameters.Parameters {
 	return t.AllParams
 }
+
+func (c Config) ManifestOnly() (tools.Tool, error) {
+	return c.Initialize(nil)
+}
