@@ -30,7 +30,7 @@ ignoreFiles = ["quickstart/shared", "quickstart/python", "quickstart/js", "quick
 
 [languages]
   [languages.en]
-    label ="English"
+    label = "English"
     weight = 1
 
 [module]
