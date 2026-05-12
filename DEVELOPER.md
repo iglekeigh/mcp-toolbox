@@ -212,13 +212,13 @@ implementation](https://github.com/googleapis/mcp-toolbox/blob/main/internal/sou
     data source (e.g., `"newdb"`).
   * `Initialize(ctx context.Context, tracer trace.Tracer) (Source, error)`:
     Creates a new instance of your data source and establishes a connection to
-    the database.
+    the database. **CRITICAL:** Ensure that any physical network connection, client handshake, or ping checks are wrapped inside `if !util.ShouldSkipConnections(ctx)` so that source metadata can be loaded cleanly in offline operations like skills generation.
 * **Implement the
   [`Source`](https://github.com/googleapis/mcp-toolbox/blob/fd300dc606d88bf9f7bba689e2cee4e3565537dd/internal/sources/sources.go#L63)
   interface**. This interface requires one method:
   * `SourceType() string`: Returns the same string identifier as `SourceConfigType()`.
 * **Implement `init()`** to register the new Source.
-* **Implement Unit Tests** in a file named `newdb_test.go`.
+* **Implement Unit Tests** in a file named `newdb_test.go`. Make sure to include a unit test (e.g., `TestInitialize_SkipConnections`) verifying that calling `Initialize` with `util.WithSkipConnections(ctx)` skips database connectivity setup successfully.
 
 #### Adding a New Tool
 
