@@ -64,16 +64,22 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	// Initializes a Firestore source
-	client, err := initFirestoreConnection(ctx, tracer, r.Name, r.Project, r.Database)
-	if err != nil {
-		return nil, err
-	}
+	var client *firestore.Client
+	var rulesClient *firebaserules.Service
 
-	// Initialize Firebase Rules client
-	rulesClient, err := initFirebaseRulesConnection(ctx, r.Project)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize Firebase Rules client: %w", err)
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		// Initializes a Firestore source
+		client, err = initFirestoreConnection(ctx, tracer, r.Name, r.Project, r.Database)
+		if err != nil {
+			return nil, err
+		}
+
+		// Initialize Firebase Rules client
+		rulesClient, err = initFirebaseRulesConnection(ctx, r.Project)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize Firebase Rules client: %w", err)
+		}
 	}
 
 	s := &Source{

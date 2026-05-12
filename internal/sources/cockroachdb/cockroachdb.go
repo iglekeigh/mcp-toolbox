@@ -103,9 +103,13 @@ func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.So
 		return nil, fmt.Errorf("invalid retryBaseDelay: %w", err)
 	}
 
-	pool, err := initCockroachDBConnectionPoolWithRetry(ctx, tracer, r.Name, r.Host, r.Port, r.User, r.Password, r.Database, r.QueryParams, r.MaxRetries, retryBaseDelay)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create pool: %w", err)
+	var pool *pgxpool.Pool
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		pool, err = initCockroachDBConnectionPoolWithRetry(ctx, tracer, r.Name, r.Host, r.Port, r.User, r.Password, r.Database, r.QueryParams, r.MaxRetries, retryBaseDelay)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create pool: %w", err)
+		}
 	}
 
 	s := &Source{

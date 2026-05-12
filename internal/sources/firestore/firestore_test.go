@@ -24,6 +24,7 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/sources"
 	"github.com/googleapis/mcp-toolbox/internal/sources/firestore"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 )
 
 func TestParseFromYamlFirestore(t *testing.T) {
@@ -155,3 +156,28 @@ func TestFirestoreValueToJSON_RoundTrip(t *testing.T) {
 		t.Errorf("created should be a string, got %T", metadata["created"])
 	}
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := firestore.Config{
+		Name:    "test-source",
+		Type:    firestore.SourceType,
+		Project: "p",
+	}
+
+	ctx := testutils.ContextWithUserAgent(util.WithSkipConnections(context.Background()), "test-agent")
+	source, err := cfg.Initialize(ctx, nil)
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != firestore.SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), firestore.SourceType)
+	}
+}
+

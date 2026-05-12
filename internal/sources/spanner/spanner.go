@@ -61,9 +61,14 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	client, err := initSpannerClient(ctx, tracer, r.Name, r.Project, r.Instance, r.Database)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create client: %w", err)
+	var client *spanner.Client
+
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		client, err = initSpannerClient(ctx, tracer, r.Name, r.Project, r.Instance, r.Database)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create client: %w", err)
+		}
 	}
 
 	s := &Source{

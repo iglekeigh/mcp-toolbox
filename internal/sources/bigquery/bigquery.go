@@ -163,30 +163,41 @@ func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.So
 		AuthTokenHeaderName: "Authorization",
 	}
 
-	if strings.ToLower(r.UseClientOAuth) == "false" || r.UseClientOAuth == "" {
-		// Initializes a BigQuery Google SQL source
-		client, restService, tokenSource, err = initBigQueryConnection(ctx, tracer, r.Name, r.Project, r.Location, r.ImpersonateServiceAccount, r.Scopes)
-		if err != nil {
-			return nil, fmt.Errorf("error creating client from ADC: %w", err)
-		}
-		s.Client = client
-		s.RestService = restService
-		s.TokenSource = tokenSource
+	if !util.ShouldSkipConnections(ctx) {
+		if strings.ToLower(r.UseClientOAuth) == "false" || r.UseClientOAuth == "" {
+			// Initializes a BigQuery Google SQL source
+			client, restService, tokenSource, err = initBigQueryConnection(ctx, tracer, r.Name, r.Project, r.Location, r.ImpersonateServiceAccount, r.Scopes)
+			if err != nil {
+				return nil, fmt.Errorf("error creating client from ADC: %w", err)
+			}
+			s.Client = client
+			s.RestService = restService
+			s.TokenSource = tokenSource
 
-		if r.WriteMode == WriteModeProtected {
-			// session-based connections
-			s.SessionProvider = s.newBigQuerySessionProvider()
+			if r.WriteMode == WriteModeProtected {
+				// session-based connections
+				s.SessionProvider = s.newBigQuerySessionProvider()
+			}
+		} else {
+			if strings.ToLower(r.UseClientOAuth) != "true" {
+				s.AuthTokenHeaderName = r.UseClientOAuth
+			}
+			// use client OAuth
+			baseClientCreator, err := newBigQueryClientCreator(ctx, tracer, r.Project, r.Location, r.Name)
+			if err != nil {
+				return nil, fmt.Errorf("error constructing client creator: %w", err)
+			}
+			setupClientCaching(s, baseClientCreator)
 		}
 	} else {
-		if strings.ToLower(r.UseClientOAuth) != "true" {
-			s.AuthTokenHeaderName = r.UseClientOAuth
+		if strings.ToLower(r.UseClientOAuth) != "false" && r.UseClientOAuth != "" {
+			if strings.ToLower(r.UseClientOAuth) != "true" {
+				s.AuthTokenHeaderName = r.UseClientOAuth
+			}
 		}
-		// use client OAuth
-		baseClientCreator, err := newBigQueryClientCreator(ctx, tracer, r.Project, r.Location, r.Name)
-		if err != nil {
-			return nil, fmt.Errorf("error constructing client creator: %w", err)
+		if r.WriteMode == WriteModeProtected {
+			s.SessionProvider = s.newBigQuerySessionProvider()
 		}
-		setupClientCaching(s, baseClientCreator)
 	}
 
 	allowedDatasets := make(map[string]struct{})
@@ -208,14 +219,16 @@ func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.So
 				allowedFullID = fmt.Sprintf("%s.%s", projectID, datasetID)
 			}
 
-			if s.Client != nil {
-				dataset := s.Client.DatasetInProject(projectID, datasetID)
-				_, err := dataset.Metadata(ctx)
-				if err != nil {
-					if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
-						return nil, fmt.Errorf("allowedDataset '%s' not found in project '%s'", datasetID, projectID)
+			if !util.ShouldSkipConnections(ctx) {
+				if s.Client != nil {
+					dataset := s.Client.DatasetInProject(projectID, datasetID)
+					_, err := dataset.Metadata(ctx)
+					if err != nil {
+						if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
+							return nil, fmt.Errorf("allowedDataset '%s' not found in project '%s'", datasetID, projectID)
+						}
+						return nil, fmt.Errorf("failed to verify allowedDataset '%s' in project '%s': %w", datasetID, projectID, err)
 					}
-					return nil, fmt.Errorf("failed to verify allowedDataset '%s' in project '%s': %w", datasetID, projectID, err)
 				}
 			}
 			allowedDatasets[allowedFullID] = struct{}{}

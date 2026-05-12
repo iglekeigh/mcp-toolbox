@@ -21,6 +21,7 @@ import (
 	gocql "github.com/apache/cassandra-gocql-driver/v2"
 	"github.com/goccy/go-yaml"
 	"github.com/googleapis/mcp-toolbox/internal/sources"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 	"github.com/googleapis/mcp-toolbox/internal/util/parameters"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -57,9 +58,14 @@ type Config struct {
 
 // Initialize implements sources.SourceConfig.
 func (c Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	session, err := initCassandraSession(ctx, tracer, c)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create session: %v", err)
+	var session *gocql.Session
+
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		session, err = initCassandraSession(ctx, tracer, c)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create session: %v", err)
+		}
 	}
 	s := &Source{
 		Config:  c,

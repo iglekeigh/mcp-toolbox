@@ -22,7 +22,9 @@ import (
 	"testing"
 
 	"github.com/googleapis/mcp-toolbox/cmd/internal"
+	_ "github.com/googleapis/mcp-toolbox/internal/sources/postgres"
 	_ "github.com/googleapis/mcp-toolbox/internal/sources/sqlite"
+	_ "github.com/googleapis/mcp-toolbox/internal/tools/postgres/postgreslisttables"
 	_ "github.com/googleapis/mcp-toolbox/internal/tools/sqlite/sqlitesql"
 	"github.com/spf13/cobra"
 )
@@ -391,3 +393,50 @@ func TestGenerateSkill_FlagValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateSkill_SkipConnections(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputDir := filepath.Join(tmpDir, "skills")
+
+	toolsFileContent := `
+sources:
+  my-postgres:
+    kind: postgres
+    host: localhost
+    port: "5432"
+    user: user
+    password: pass
+    database: db
+tools:
+  list-tables:
+    kind: postgres-list-tables
+    source: my-postgres
+    description: "List tables"
+`
+
+	toolsFilePath := filepath.Join(tmpDir, "tools.yaml")
+	if err := os.WriteFile(toolsFilePath, []byte(toolsFileContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	args := []string{
+		"skills-generate",
+		"--config", toolsFilePath,
+		"--output-dir", outputDir,
+		"--name", "postgres-skill",
+		"--description", "Postgres skill",
+	}
+
+	// Should succeed even though postgres is not running
+	got, err := invokeCommand(args)
+	if err != nil {
+		t.Fatalf("command failed (should skip connections): %v\nOutput: %s", err, got)
+	}
+
+	// Verify skill was generated
+	skillPath := filepath.Join(outputDir, "postgres-skill")
+	if _, err := os.Stat(skillPath); os.IsNotExist(err) {
+		t.Fatalf("skill directory not created: %s", skillPath)
+	}
+}
+

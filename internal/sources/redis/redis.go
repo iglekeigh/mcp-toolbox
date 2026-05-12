@@ -21,6 +21,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/googleapis/mcp-toolbox/internal/sources"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -74,9 +75,14 @@ var _ RedisClient = (*redis.Client)(nil)
 var _ RedisClient = (*redis.ClusterClient)(nil)
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	client, err := initRedisClient(ctx, r)
-	if err != nil {
-		return nil, fmt.Errorf("error initializing Redis client: %s", err)
+	var client RedisClient
+
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		client, err = initRedisClient(ctx, r)
+		if err != nil {
+			return nil, fmt.Errorf("error initializing Redis client: %s", err)
+		}
 	}
 	s := &Source{
 		Config: r,

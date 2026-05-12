@@ -23,6 +23,7 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/sources"
 	"github.com/googleapis/mcp-toolbox/internal/sources/dataplex"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 )
 
 func TestParseFromYamlDataplex(t *testing.T) {
@@ -102,3 +103,28 @@ func TestFailParseFromYaml(t *testing.T) {
 		})
 	}
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := dataplex.Config{
+		Name:    "test-source",
+		Type:    dataplex.SourceType,
+		Project: "p",
+	}
+
+	ctx := testutils.ContextWithUserAgent(util.WithSkipConnections(context.Background()), "test-agent")
+	source, err := cfg.Initialize(ctx, nil)
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != dataplex.SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), dataplex.SourceType)
+	}
+}
+

@@ -20,6 +20,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/googleapis/mcp-toolbox/internal/sources"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 	"github.com/yugabyte/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -63,14 +64,19 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	pool, err := initYugabyteDBConnectionPool(ctx, tracer, r.Name, r.Host, r.Port, r.User, r.Password, r.Database, r.LoadBalance, r.TopologyKeys, r.YBServersRefreshInterval, r.FallBackToTopologyKeysOnly, r.FailedHostReconnectDelaySeconds)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create pool: %w", err)
-	}
+	var pool *pgxpool.Pool
 
-	err = pool.Ping(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect successfully: %w", err)
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		pool, err = initYugabyteDBConnectionPool(ctx, tracer, r.Name, r.Host, r.Port, r.User, r.Password, r.Database, r.LoadBalance, r.TopologyKeys, r.YBServersRefreshInterval, r.FallBackToTopologyKeysOnly, r.FailedHostReconnectDelaySeconds)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create pool: %w", err)
+		}
+
+		err = pool.Ping(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to connect successfully: %w", err)
+		}
 	}
 
 	s := &Source{

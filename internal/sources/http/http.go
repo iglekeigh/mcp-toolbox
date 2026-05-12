@@ -71,30 +71,33 @@ func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.So
 		return nil, fmt.Errorf("unable to parse Timeout string as time.Duration: %s", err)
 	}
 
-	tr := &http.Transport{}
-
-	logger, err := util.LoggerFromContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get logger from ctx: %s", err)
-	}
-
-	if r.DisableSslVerification {
-		tr.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: true,
-		}
-
-		logger.WarnContext(ctx, "Insecure HTTP is enabled for HTTP source %s. TLS certificate verification is skipped.\n", r.Name)
-	}
-
-	client := http.Client{
-		Timeout:   duration,
-		Transport: tr,
-	}
-
 	// Validate BaseURL
 	_, err = url.ParseRequestURI(r.BaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse BaseUrl %v", err)
+	}
+
+	var client http.Client
+	if !util.ShouldSkipConnections(ctx) {
+		tr := &http.Transport{}
+
+		logger, err := util.LoggerFromContext(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get logger from ctx: %s", err)
+		}
+
+		if r.DisableSslVerification {
+			tr.TLSClientConfig = &tls.Config{
+				InsecureSkipVerify: true,
+			}
+
+			logger.WarnContext(ctx, "Insecure HTTP is enabled for HTTP source %s. TLS certificate verification is skipped.\n", r.Name)
+		}
+
+		client = http.Client{
+			Timeout:   duration,
+			Transport: tr,
+		}
 	}
 
 	ua, err := util.UserAgentFromContext(ctx)
@@ -114,7 +117,6 @@ func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.So
 		client: &client,
 	}
 	return s, nil
-
 }
 
 var _ sources.Source = &Source{}

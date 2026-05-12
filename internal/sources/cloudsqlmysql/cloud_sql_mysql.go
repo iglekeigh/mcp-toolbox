@@ -66,14 +66,19 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	pool, err := initCloudSQLMySQLConnectionPool(ctx, tracer, r.Name, r.Project, r.Region, r.Instance, r.IPType.String(), r.User, r.Password, r.Database)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create pool: %w", err)
-	}
+	var pool *sql.DB
 
-	err = pool.PingContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect successfully: %w", err)
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		pool, err = initCloudSQLMySQLConnectionPool(ctx, tracer, r.Name, r.Project, r.Region, r.Instance, r.IPType.String(), r.User, r.Password, r.Database)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create pool: %w", err)
+		}
+
+		err = pool.PingContext(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to connect successfully: %w", err)
+		}
 	}
 
 	s := &Source{

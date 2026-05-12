@@ -22,6 +22,7 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/server"
 	"github.com/googleapis/mcp-toolbox/internal/sources"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 )
 
 func TestBuildTrinoDSN(t *testing.T) {
@@ -279,3 +280,31 @@ func TestParseFromYamlTrino(t *testing.T) {
 		})
 	}
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		Name:    "test-source",
+		Type:    SourceType,
+		Host:    "h",
+		Port:    "p",
+		Catalog: "c",
+		Schema:  "s",
+	}
+
+	ctx := testutils.ContextWithUserAgent(util.WithSkipConnections(context.Background()), "test-agent")
+	source, err := cfg.Initialize(ctx, nil)
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), SourceType)
+	}
+}
+

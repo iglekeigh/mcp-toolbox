@@ -63,10 +63,16 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	// Initializes a Dataplex source
-	client, dataScanClient, err := initDataplexConnection(ctx, tracer, r.Name, r.Project)
-	if err != nil {
-		return nil, err
+	var client *dataplexapi.CatalogClient
+	var dataScanClient *dataplexapi.DataScanClient
+
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		// Initializes a Dataplex source
+		client, dataScanClient, err = initDataplexConnection(ctx, tracer, r.Name, r.Project)
+		if err != nil {
+			return nil, err
+		}
 	}
 	s := &Source{
 		Config:         r,

@@ -20,6 +20,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/googleapis/mcp-toolbox/internal/sources"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/snowflakedb/gosnowflake/v2"
 	"go.opentelemetry.io/otel/trace"
@@ -61,14 +62,19 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	db, err := initSnowflakeConnection(ctx, tracer, r.Name, r.Account, r.User, r.Password, r.Database, r.Schema, r.Warehouse, r.Role)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create connection: %w", err)
-	}
+	var db *sqlx.DB
 
-	err = db.PingContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect successfully: %w", err)
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		db, err = initSnowflakeConnection(ctx, tracer, r.Name, r.Account, r.User, r.Password, r.Database, r.Schema, r.Warehouse, r.Role)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create connection: %w", err)
+		}
+
+		err = db.PingContext(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to connect successfully: %w", err)
+		}
 	}
 
 	s := &Source{

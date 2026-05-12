@@ -74,12 +74,14 @@ func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.So
 		userAgent: ua,
 	}
 
-	if !r.UseClientOAuth {
-		client, err := NewDataChatClient(ctx, option.WithUserAgent(ua))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create DataChatClient: %w", err)
+	if !util.ShouldSkipConnections(ctx) {
+		if !r.UseClientOAuth {
+			client, err := NewDataChatClient(ctx, option.WithUserAgent(ua))
+			if err != nil {
+				return nil, fmt.Errorf("failed to create DataChatClient: %w", err)
+			}
+			s.Client = client
 		}
-		s.Client = client
 	}
 
 	return s, nil

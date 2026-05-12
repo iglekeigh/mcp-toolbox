@@ -226,3 +226,29 @@ func TestRunRequestIncludesErrorBodyWhenEnabled(t *testing.T) {
 		t.Fatalf("expected response body in error message, got %q", err.Error())
 	}
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := http.Config{
+		Name:    "test-source",
+		Type:    http.SourceType,
+		BaseURL: "http://localhost",
+		Timeout: "30s",
+	}
+
+	ctx := testutils.ContextWithUserAgent(util.WithSkipConnections(context.Background()), "test-agent")
+	source, err := cfg.Initialize(ctx, nil)
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != http.SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), http.SourceType)
+	}
+}
+

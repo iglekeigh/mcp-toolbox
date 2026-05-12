@@ -20,6 +20,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/googleapis/mcp-toolbox/internal/sources"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 	"github.com/valkey-io/valkey-go"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -59,10 +60,14 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
+	var client valkey.Client
 
-	client, err := initValkeyClient(ctx, r)
-	if err != nil {
-		return nil, fmt.Errorf("error initializing Valkey client: %s", err)
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		client, err = initValkeyClient(ctx, r)
+		if err != nil {
+			return nil, fmt.Errorf("error initializing Valkey client: %s", err)
+		}
 	}
 	s := &Source{
 		Config: r,

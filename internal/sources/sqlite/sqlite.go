@@ -22,6 +22,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/googleapis/mcp-toolbox/internal/sources"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 	"github.com/googleapis/mcp-toolbox/internal/util/orderedmap"
 	"go.opentelemetry.io/otel/trace"
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
@@ -57,14 +58,19 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	db, err := initSQLiteConnection(ctx, tracer, r.Name, r.Database)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create db connection: %w", err)
-	}
+	var db *sql.DB
 
-	err = db.PingContext(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect successfully: %w", err)
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		db, err = initSQLiteConnection(ctx, tracer, r.Name, r.Database)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create db connection: %w", err)
+		}
+
+		err = db.PingContext(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("unable to connect successfully: %w", err)
+		}
 	}
 
 	s := &Source{

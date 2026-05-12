@@ -72,30 +72,35 @@ func (r Config) SourceConfigType() string {
 
 // Initialize initializes a CloudSQL Admin Source instance.
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	ua, err := util.UserAgentFromContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("error in User Agent retrieval: %s", err)
-	}
+	var service *sqladmin.Service
 
-	var client *http.Client
-	if r.UseClientOAuth {
-		client = &http.Client{
-			Transport: util.NewUserAgentRoundTripper(ua, http.DefaultTransport),
-		}
-	} else {
-		// Use Application Default Credentials
-		creds, err := google.FindDefaultCredentials(ctx, sqladmin.SqlserviceAdminScope)
+	if !util.ShouldSkipConnections(ctx) {
+		ua, err := util.UserAgentFromContext(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to find default credentials: %w", err)
+			return nil, fmt.Errorf("error in User Agent retrieval: %s", err)
 		}
-		baseClient := oauth2.NewClient(ctx, creds.TokenSource)
-		baseClient.Transport = util.NewUserAgentRoundTripper(ua, baseClient.Transport)
-		client = baseClient
-	}
 
-	service, err := sqladmin.NewService(ctx, option.WithHTTPClient(client))
-	if err != nil {
-		return nil, fmt.Errorf("error creating new sqladmin service: %w", err)
+		var client *http.Client
+		if r.UseClientOAuth {
+			client = &http.Client{
+				Transport: util.NewUserAgentRoundTripper(ua, http.DefaultTransport),
+			}
+		} else {
+			// Use Application Default Credentials
+			creds, err := google.FindDefaultCredentials(ctx, sqladmin.SqlserviceAdminScope)
+			if err != nil {
+				return nil, fmt.Errorf("failed to find default credentials: %w", err)
+			}
+			baseClient := oauth2.NewClient(ctx, creds.TokenSource)
+			baseClient.Transport = util.NewUserAgentRoundTripper(ua, baseClient.Transport)
+			client = baseClient
+		}
+
+		var errService error
+		service, errService = sqladmin.NewService(ctx, option.WithHTTPClient(client))
+		if errService != nil {
+			return nil, fmt.Errorf("error creating new sqladmin service: %w", errService)
+		}
 	}
 
 	s := &Source{

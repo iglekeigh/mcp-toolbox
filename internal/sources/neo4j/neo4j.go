@@ -64,14 +64,19 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	driver, err := initNeo4jDriver(ctx, tracer, r.Uri, r.User, r.Password, r.Name)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create driver: %w", err)
-	}
+	var driver neo4j.Driver
 
-	err = driver.VerifyConnectivity(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect successfully: %w", err)
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		driver, err = initNeo4jDriver(ctx, tracer, r.Uri, r.User, r.Password, r.Name)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create driver: %w", err)
+		}
+
+		err = driver.VerifyConnectivity(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to connect successfully: %w", err)
+		}
 	}
 
 	if r.Database == "" {

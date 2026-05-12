@@ -77,49 +77,63 @@ func (c Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.So
 	var serviceCreator HealthcareServiceCreator
 	var tokenSource oauth2.TokenSource
 
-	svc, tok, err := initHealthcareConnection(ctx, tracer, c.Name)
-	if err != nil {
-		return nil, fmt.Errorf("error creating service from ADC: %w", err)
-	}
 	if c.UseClientOAuth {
+		var err error
 		serviceCreator, err = newHealthcareServiceCreator(ctx, tracer, c.Name)
 		if err != nil {
 			return nil, fmt.Errorf("error constructing service creator: %w", err)
 		}
-	} else {
-		service = svc
-		tokenSource = tok
+	}
+
+	if !util.ShouldSkipConnections(ctx) {
+		svc, tok, err := initHealthcareConnection(ctx, tracer, c.Name)
+		if err != nil {
+			return nil, fmt.Errorf("error creating service from ADC: %w", err)
+		}
+		if !c.UseClientOAuth {
+			service = svc
+			tokenSource = tok
+		}
+
+		dsName := fmt.Sprintf("projects/%s/locations/%s/datasets/%s", c.Project, c.Region, c.Dataset)
+		if _, err = svc.Projects.Locations.Datasets.FhirStores.Get(dsName).Do(); err != nil {
+			if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
+				return nil, fmt.Errorf("dataset '%s' not found", dsName)
+			}
+			return nil, fmt.Errorf("failed to verify existence of dataset '%s': %w", dsName, err)
+		}
 	}
 
 	dsName := fmt.Sprintf("projects/%s/locations/%s/datasets/%s", c.Project, c.Region, c.Dataset)
-	if _, err = svc.Projects.Locations.Datasets.FhirStores.Get(dsName).Do(); err != nil {
-		if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
-			return nil, fmt.Errorf("dataset '%s' not found", dsName)
-		}
-		return nil, fmt.Errorf("failed to verify existence of dataset '%s': %w", dsName, err)
-	}
-
 	allowedFHIRStores := make(map[string]struct{})
 	for _, store := range c.AllowedFHIRStores {
-		name := fmt.Sprintf("%s/fhirStores/%s", dsName, store)
-		_, err := svc.Projects.Locations.Datasets.FhirStores.Get(name).Do()
-		if err != nil {
-			if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
-				return nil, fmt.Errorf("allowedFhirStore '%s' not found in dataset '%s'", store, dsName)
+		if !util.ShouldSkipConnections(ctx) {
+			if service != nil {
+				name := fmt.Sprintf("%s/fhirStores/%s", dsName, store)
+				_, err := service.Projects.Locations.Datasets.FhirStores.Get(name).Do()
+				if err != nil {
+					if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
+						return nil, fmt.Errorf("allowedFhirStore '%s' not found in dataset '%s'", store, dsName)
+					}
+					return nil, fmt.Errorf("failed to verify allowedFhirStore '%s' in datasest '%s': %w", store, dsName, err)
+				}
 			}
-			return nil, fmt.Errorf("failed to verify allowedFhirStore '%s' in datasest '%s': %w", store, dsName, err)
 		}
 		allowedFHIRStores[store] = struct{}{}
 	}
 	allowedDICOMStores := make(map[string]struct{})
 	for _, store := range c.AllowedDICOMStores {
-		name := fmt.Sprintf("%s/dicomStores/%s", dsName, store)
-		_, err := svc.Projects.Locations.Datasets.DicomStores.Get(name).Do()
-		if err != nil {
-			if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
-				return nil, fmt.Errorf("allowedDicomStore '%s' not found in dataset '%s'", store, dsName)
+		if !util.ShouldSkipConnections(ctx) {
+			if service != nil {
+				name := fmt.Sprintf("%s/dicomStores/%s", dsName, store)
+				_, err := service.Projects.Locations.Datasets.DicomStores.Get(name).Do()
+				if err != nil {
+					if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
+						return nil, fmt.Errorf("allowedDicomStore '%s' not found in dataset '%s'", store, dsName)
+					}
+					return nil, fmt.Errorf("failed to verify allowedDicomFhirStore '%s' in datasest '%s': %w", store, dsName, err)
+				}
 			}
-			return nil, fmt.Errorf("failed to verify allowedDicomFhirStore '%s' in datasest '%s': %w", store, dsName, err)
 		}
 		allowedDICOMStores[store] = struct{}{}
 	}

@@ -59,15 +59,20 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	client, err := initMongoDBClient(ctx, tracer, r.Name, r.Uri)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create MongoDB client: %w", err)
-	}
+	var client *mongo.Client
 
-	// Verify the connection
-	err = client.Ping(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect successfully: %w", err)
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		client, err = initMongoDBClient(ctx, tracer, r.Name, r.Uri)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create MongoDB client: %w", err)
+		}
+
+		// Verify the connection
+		err = client.Ping(ctx, nil)
+		if err != nil {
+			return nil, fmt.Errorf("unable to connect successfully: %w", err)
+		}
 	}
 
 	s := &Source{

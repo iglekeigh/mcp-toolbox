@@ -24,6 +24,7 @@ import (
 	_ "github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/goccy/go-yaml"
 	"github.com/googleapis/mcp-toolbox/internal/sources"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 	"github.com/googleapis/mcp-toolbox/internal/util/parameters"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -64,14 +65,19 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	pool, err := initClickHouseConnectionPool(ctx, tracer, r.Name, r.Host, r.Port, r.User, r.Password, r.Database, r.Protocol, r.Secure)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create pool: %w", err)
-	}
+	var pool *sql.DB
 
-	err = pool.PingContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect successfully: %w", err)
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		pool, err = initClickHouseConnectionPool(ctx, tracer, r.Name, r.Host, r.Port, r.User, r.Password, r.Database, r.Protocol, r.Secure)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create pool: %w", err)
+		}
+
+		err = pool.PingContext(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to connect successfully: %w", err)
+		}
 	}
 
 	s := &Source{

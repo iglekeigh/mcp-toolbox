@@ -89,12 +89,14 @@ func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.So
 		}
 		setupClientCaching(s, baseClientCreator)
 	} else {
-		client, tokenSource, err = initLogAdminConnection(ctx, tracer, r.Name, r.Project, r.ImpersonateServiceAccount)
-		if err != nil {
-			return nil, fmt.Errorf("error creating client from ADC %w", err)
+		if !util.ShouldSkipConnections(ctx) {
+			client, tokenSource, err = initLogAdminConnection(ctx, tracer, r.Name, r.Project, r.ImpersonateServiceAccount)
+			if err != nil {
+				return nil, fmt.Errorf("error creating client from ADC %w", err)
+			}
+			s.Client = client
+			s.TokenSource = tokenSource
 		}
-		s.Client = client
-		s.TokenSource = tokenSource
 	}
 	return s, nil
 }

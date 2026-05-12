@@ -24,6 +24,7 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/server"
 	"github.com/googleapis/mcp-toolbox/internal/sources"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 	"go.opentelemetry.io/otel"
 )
 
@@ -314,3 +315,31 @@ func TestInitClickHouseConnectionPoolDSNGeneration(t *testing.T) {
 		})
 	}
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		Name:     "test-source",
+		Type:     SourceType,
+		Host:     "h",
+		Port:     "p",
+		Database: "d",
+		User:     "u",
+	}
+
+	ctx := util.WithSkipConnections(context.Background())
+	source, err := cfg.Initialize(ctx, nil)
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), SourceType)
+	}
+}
+

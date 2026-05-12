@@ -24,6 +24,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/goccy/go-yaml"
 	"github.com/googleapis/mcp-toolbox/internal/sources"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -69,14 +70,19 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	pool, err := initTiDBConnectionPool(ctx, tracer, r.Name, r.Host, r.Port, r.User, r.Password, r.Database, r.UseSSL)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create pool: %w", err)
-	}
+	var pool *sql.DB
 
-	err = pool.PingContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect successfully: %w", err)
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		pool, err = initTiDBConnectionPool(ctx, tracer, r.Name, r.Host, r.Port, r.User, r.Password, r.Database, r.UseSSL)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create pool: %w", err)
+		}
+
+		err = pool.PingContext(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to connect successfully: %w", err)
+		}
 	}
 
 	s := &Source{

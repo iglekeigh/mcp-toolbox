@@ -25,6 +25,7 @@ import (
 	tlsutil "github.com/couchbase/tools-common/http/tls"
 	"github.com/goccy/go-yaml"
 	"github.com/googleapis/mcp-toolbox/internal/sources"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 	"github.com/googleapis/mcp-toolbox/internal/util/parameters"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -71,17 +72,21 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
+	var scope *gocb.Scope
 
-	opts, err := r.createCouchbaseOptions()
-	if err != nil {
-		return nil, err
-	}
-	cluster, err := gocb.Connect(r.ConnectionString, opts)
-	if err != nil {
-		return nil, err
+	if !util.ShouldSkipConnections(ctx) {
+		opts, err := r.createCouchbaseOptions()
+		if err != nil {
+			return nil, err
+		}
+		cluster, err := gocb.Connect(r.ConnectionString, opts)
+		if err != nil {
+			return nil, err
+		}
+
+		scope = cluster.Bucket(r.Bucket).Scope(r.Scope)
 	}
 
-	scope := cluster.Bucket(r.Bucket).Scope(r.Scope)
 	s := &Source{
 		Config: r,
 		Scope:  scope,

@@ -66,19 +66,21 @@ func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.So
 	}
 
 	var client *http.Client
-	if r.UseClientOAuth {
-		client = &http.Client{
-			Transport: util.NewUserAgentRoundTripper(ua, http.DefaultTransport),
+	if !util.ShouldSkipConnections(ctx) {
+		if r.UseClientOAuth {
+			client = &http.Client{
+				Transport: util.NewUserAgentRoundTripper(ua, http.DefaultTransport),
+			}
+		} else {
+			// Use Application Default Credentials
+			creds, err := google.FindDefaultCredentials(ctx, monitoring.MonitoringScope)
+			if err != nil {
+				return nil, fmt.Errorf("failed to find default credentials: %w", err)
+			}
+			baseClient := oauth2.NewClient(ctx, creds.TokenSource)
+			baseClient.Transport = util.NewUserAgentRoundTripper(ua, baseClient.Transport)
+			client = baseClient
 		}
-	} else {
-		// Use Application Default Credentials
-		creds, err := google.FindDefaultCredentials(ctx, monitoring.MonitoringScope)
-		if err != nil {
-			return nil, fmt.Errorf("failed to find default credentials: %w", err)
-		}
-		baseClient := oauth2.NewClient(ctx, creds.TokenSource)
-		baseClient.Transport = util.NewUserAgentRoundTripper(ua, baseClient.Transport)
-		client = baseClient
 	}
 
 	s := &Source{

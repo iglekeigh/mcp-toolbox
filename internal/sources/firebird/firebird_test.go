@@ -23,6 +23,7 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/sources"
 	"github.com/googleapis/mcp-toolbox/internal/sources/firebird"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 )
 
 func TestParseFromYamlFirebird(t *testing.T) {
@@ -118,3 +119,32 @@ func TestFailParseFromYaml(t *testing.T) {
 		})
 	}
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := firebird.Config{
+		Name:     "test-source",
+		Type:     firebird.SourceType,
+		Host:     "h",
+		Port:     "p",
+		User:     "u",
+		Password: "pw",
+		Database: "d",
+	}
+
+	ctx := testutils.ContextWithUserAgent(util.WithSkipConnections(context.Background()), "test-agent")
+	source, err := cfg.Initialize(ctx, nil)
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != firebird.SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), firebird.SourceType)
+	}
+}
+

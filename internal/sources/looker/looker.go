@@ -114,7 +114,9 @@ func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.So
 	}
 
 	var tokenSource oauth2.TokenSource
-	tokenSource, _ = initGoogleCloudConnection(ctx)
+	if !util.ShouldSkipConnections(ctx) {
+		tokenSource, _ = initGoogleCloudConnection(ctx)
+	}
 
 	s := &Source{
 		Config:              r,
@@ -127,12 +129,14 @@ func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.So
 		if r.ClientId == "" || r.ClientSecret == "" {
 			return nil, fmt.Errorf("client_id and client_secret need to be specified")
 		}
-		s.Client = v4.NewLookerSDK(rtl.NewAuthSession(cfg))
-		resp, err := s.Client.Me("", s.ApiSettings)
-		if err != nil {
-			return nil, fmt.Errorf("incorrect settings: %w", err)
+		if !util.ShouldSkipConnections(ctx) {
+			s.Client = v4.NewLookerSDK(rtl.NewAuthSession(cfg))
+			resp, err := s.Client.Me("", s.ApiSettings)
+			if err != nil {
+				return nil, fmt.Errorf("incorrect settings: %w", err)
+			}
+			logger.DebugContext(ctx, fmt.Sprintf("logged in as %s %s", *resp.FirstName, *resp.LastName))
 		}
-		logger.DebugContext(ctx, fmt.Sprintf("logged in as %s %s", *resp.FirstName, *resp.LastName))
 	} else {
 		if strings.ToLower(r.UseClientOAuth) != "true" {
 			s.AuthTokenHeaderName = r.UseClientOAuth

@@ -24,6 +24,8 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/sources"
 	"github.com/googleapis/mcp-toolbox/internal/sources/elasticsearch"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/internal/util"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 func TestParseFromYamlElasticsearch(t *testing.T) {
@@ -249,3 +251,29 @@ func TestTool_esqlToMap(t1 *testing.T) {
 		})
 	}
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := elasticsearch.Config{
+		Name:      "test-source",
+		Type:      elasticsearch.SourceType,
+		Addresses: []string{"http://localhost:9200"},
+		APIKey:    "k",
+	}
+
+	ctx := testutils.ContextWithUserAgent(util.WithSkipConnections(context.Background()), "test-agent")
+	source, err := cfg.Initialize(ctx, noop.NewTracerProvider().Tracer(""))
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != elasticsearch.SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), elasticsearch.SourceType)
+	}
+}
+

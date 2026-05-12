@@ -532,3 +532,28 @@ func TestNormalizeValue(t *testing.T) {
 		})
 	}
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := bigquery.Config{
+		Name:    "test-source",
+		Type:    bigquery.SourceType,
+		Project: "test-project",
+	}
+
+	ctx := util.WithSkipConnections(context.Background())
+	source, err := cfg.Initialize(ctx, noop.NewTracerProvider().Tracer(""))
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != bigquery.SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), bigquery.SourceType)
+	}
+}
+

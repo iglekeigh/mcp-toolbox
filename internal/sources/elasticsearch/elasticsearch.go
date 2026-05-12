@@ -94,42 +94,48 @@ func (c Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.So
 		return nil, fmt.Errorf("error getting user agent from context: %w", err)
 	}
 
-	// Create a new Elasticsearch client with the provided configuration
-	cfg := elasticsearch.Config{
-		Addresses:       c.Addresses,
-		Instrumentation: elasticsearch.NewOpenTelemetryInstrumentation(tracerProvider, false),
-		Header:          http.Header{"User-Agent": []string{ua + " go-elasticsearch/" + elasticsearch.Version}},
-	}
-
 	// Client need either username and password or an API key
-	if c.Username != "" && c.Password != "" {
-		cfg.Username = c.Username
-		cfg.Password = c.Password
-	} else if c.APIKey != "" {
-		// API key will be set below
-		cfg.APIKey = c.APIKey
-	} else {
-		// If neither username/password nor API key is provided, we throw an error
-		return nil, fmt.Errorf("elasticsearch source %q requires either username/password or an API key", c.Name)
+	if c.Username == "" || c.Password == "" {
+		if c.APIKey == "" {
+			return nil, fmt.Errorf("elasticsearch source %q requires either username/password or an API key", c.Name)
+		}
 	}
 
-	client, err := elasticsearch.NewBaseClient(cfg)
-	if err != nil {
-		return nil, err
-	}
+	var client EsClient
+	if !util.ShouldSkipConnections(ctx) {
+		// Create a new Elasticsearch client with the provided configuration
+		cfg := elasticsearch.Config{
+			Addresses:       c.Addresses,
+			Instrumentation: elasticsearch.NewOpenTelemetryInstrumentation(tracerProvider, false),
+			Header:          http.Header{"User-Agent": []string{ua + " go-elasticsearch/" + elasticsearch.Version}},
+		}
 
-	// Test connection
-	res, err := esapi.InfoRequest{
-		Instrument: client.InstrumentationEnabled(),
-	}.Do(ctx, client)
+		if c.Username != "" && c.Password != "" {
+			cfg.Username = c.Username
+			cfg.Password = c.Password
+		} else if c.APIKey != "" {
+			cfg.APIKey = c.APIKey
+		}
 
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
+		var errClient error
+		client, errClient = elasticsearch.NewBaseClient(cfg)
+		if errClient != nil {
+			return nil, errClient
+		}
 
-	if res.IsError() {
-		return nil, fmt.Errorf("elasticsearch connection failed: status %d", res.StatusCode)
+		// Test connection
+		res, err := esapi.InfoRequest{
+			Instrument: client.InstrumentationEnabled(),
+		}.Do(ctx, client)
+
+		if err != nil {
+			return nil, err
+		}
+		defer res.Body.Close()
+
+		if res.IsError() {
+			return nil, fmt.Errorf("elasticsearch connection failed: status %d", res.StatusCode)
+		}
 	}
 
 	s := &Source{

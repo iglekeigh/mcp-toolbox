@@ -23,6 +23,7 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/sources"
 	"github.com/googleapis/mcp-toolbox/internal/sources/cloudsqlpg"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 )
 
 func TestParseFromYamlCloudSQLPg(t *testing.T) {
@@ -223,3 +224,31 @@ func TestFailParseFromYaml(t *testing.T) {
 		})
 	}
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := cloudsqlpg.Config{
+		Name:     "test-source",
+		Type:     cloudsqlpg.SourceType,
+		Project:  "p",
+		Region:   "r",
+		Instance: "i",
+		Database: "d",
+	}
+
+	ctx := testutils.ContextWithUserAgent(util.WithSkipConnections(context.Background()), "test-agent")
+	source, err := cfg.Initialize(ctx, nil)
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != cloudsqlpg.SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), cloudsqlpg.SourceType)
+	}
+}
+

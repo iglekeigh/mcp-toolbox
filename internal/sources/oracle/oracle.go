@@ -101,14 +101,19 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	db, err := initOracleConnection(ctx, tracer, r)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create Oracle connection: %w", err)
-	}
+	var db *sql.DB
 
-	err = db.PingContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect to Oracle successfully: %w", err)
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		db, err = initOracleConnection(ctx, tracer, r)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create Oracle connection: %w", err)
+		}
+
+		err = db.PingContext(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to connect to Oracle successfully: %w", err)
+		}
 	}
 
 	s := &Source{

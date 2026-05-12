@@ -23,6 +23,7 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/sources"
 	"github.com/googleapis/mcp-toolbox/internal/sources/alloydbpg"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 )
 
 func TestParseFromYamlAlloyDBPg(t *testing.T) {
@@ -204,3 +205,32 @@ func TestFailParseFromYaml(t *testing.T) {
 		})
 	}
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := alloydbpg.Config{
+		Name:     "test-source",
+		Type:     alloydbpg.SourceType,
+		Project:  "p",
+		Region:   "r",
+		Cluster:  "c",
+		Instance: "i",
+		Database: "d",
+	}
+
+	ctx := util.WithSkipConnections(context.Background())
+	source, err := cfg.Initialize(ctx, nil)
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != alloydbpg.SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), alloydbpg.SourceType)
+	}
+}
+

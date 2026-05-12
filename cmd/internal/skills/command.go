@@ -27,9 +27,11 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/server"
 	"github.com/googleapis/mcp-toolbox/internal/server/resources"
 	"github.com/googleapis/mcp-toolbox/internal/tools"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 
 	"github.com/spf13/cobra"
 )
+
 
 // skillsCmd is the command for generating skills.
 type skillsCmd struct {
@@ -83,7 +85,11 @@ func run(cmd *skillsCmd, opts *internal.ToolboxOptions) error {
 		_ = shutdown(ctx)
 	}()
 
+	// Add skipConnections flag for skills generation
+	ctx = util.WithSkipConnections(ctx)
+
 	parser := internal.ConfigParser{}
+
 	_, err = opts.LoadConfig(ctx, &parser)
 	if err != nil {
 		return err

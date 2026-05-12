@@ -23,6 +23,7 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/sources"
 	"github.com/googleapis/mcp-toolbox/internal/sources/spanner"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 )
 
 func TestParseFromYamlSpannerDb(t *testing.T) {
@@ -168,3 +169,30 @@ func TestFailParseFromYaml(t *testing.T) {
 		})
 	}
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := spanner.Config{
+		Name:     "test-source",
+		Type:     spanner.SourceType,
+		Project:  "p",
+		Instance: "i",
+		Database: "d",
+	}
+
+	ctx := testutils.ContextWithUserAgent(util.WithSkipConnections(context.Background()), "test-agent")
+	source, err := cfg.Initialize(ctx, nil)
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != spanner.SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), spanner.SourceType)
+	}
+}
+

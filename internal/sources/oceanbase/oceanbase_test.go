@@ -23,6 +23,7 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/sources"
 	"github.com/googleapis/mcp-toolbox/internal/sources/oceanbase"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 )
 
 // Test parsing OceanBase source config from YAML.
@@ -145,3 +146,32 @@ func TestFailParseFromYamlOceanBase(t *testing.T) {
 		})
 	}
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := oceanbase.Config{
+		Name:     "test-source",
+		Type:     oceanbase.SourceType,
+		Host:     "h",
+		Port:     "p",
+		User:     "u",
+		Password: "pw",
+		Database: "d",
+	}
+
+	ctx := testutils.ContextWithUserAgent(util.WithSkipConnections(context.Background()), "test-agent")
+	source, err := cfg.Initialize(ctx, nil)
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != oceanbase.SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), oceanbase.SourceType)
+	}
+}
+

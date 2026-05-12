@@ -70,21 +70,30 @@ func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.So
 		return nil, fmt.Errorf("error in User Agent retrieval: %s", err)
 	}
 	endpoint := fmt.Sprintf("%s-dataproc.googleapis.com:443", r.Location)
-	batchClient, err := dataproc.NewBatchControllerClient(ctx, option.WithEndpoint(endpoint), option.WithUserAgent(ua))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create dataproc batch client: %w", err)
-	}
-	sessionTemplateClient, err := dataproc.NewSessionTemplateControllerClient(ctx, option.WithEndpoint(endpoint), option.WithUserAgent(ua))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create dataproc session template client: %w", err)
-	}
-	opsClient, err := longrunning.NewOperationsClient(ctx, option.WithEndpoint(endpoint), option.WithUserAgent(ua))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create longrunning client: %w", err)
-	}
-	sessionClient, err := dataproc.NewSessionControllerClient(ctx, option.WithEndpoint(endpoint), option.WithUserAgent(ua))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create dataproc session client: %w", err)
+
+	var batchClient *dataproc.BatchControllerClient
+	var sessionTemplateClient *dataproc.SessionTemplateControllerClient
+	var opsClient *longrunning.OperationsClient
+	var sessionClient *dataproc.SessionControllerClient
+
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		batchClient, err = dataproc.NewBatchControllerClient(ctx, option.WithEndpoint(endpoint), option.WithUserAgent(ua))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create dataproc batch client: %w", err)
+		}
+		sessionTemplateClient, err = dataproc.NewSessionTemplateControllerClient(ctx, option.WithEndpoint(endpoint), option.WithUserAgent(ua))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create dataproc session template client: %w", err)
+		}
+		opsClient, err = longrunning.NewOperationsClient(ctx, option.WithEndpoint(endpoint), option.WithUserAgent(ua))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create longrunning client: %w", err)
+		}
+		sessionClient, err = dataproc.NewSessionControllerClient(ctx, option.WithEndpoint(endpoint), option.WithUserAgent(ua))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create dataproc session client: %w", err)
+		}
 	}
 
 	s := &Source{

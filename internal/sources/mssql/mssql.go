@@ -65,16 +65,21 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	// Initializes a MSSQL source
-	db, err := initMssqlConnection(ctx, tracer, r.Name, r.Host, r.Port, r.User, r.Password, r.Database, r.Encrypt)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create db connection: %w", err)
-	}
+	var db *sql.DB
 
-	// Verify db connection
-	err = db.PingContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect successfully: %w", err)
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		// Initializes a MSSQL source
+		db, err = initMssqlConnection(ctx, tracer, r.Name, r.Host, r.Port, r.User, r.Password, r.Database, r.Encrypt)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create db connection: %w", err)
+		}
+
+		// Verify db connection
+		err = db.PingContext(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to connect successfully: %w", err)
+		}
 	}
 
 	s := &Source{

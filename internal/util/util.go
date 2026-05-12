@@ -214,3 +214,15 @@ func GenAIMetricAttrsFromContext(ctx context.Context) *GenAIMetricAttrs {
 	}
 	return nil
 }
+
+type skipConnectionsKey struct{}
+
+// WithSkipConnections adds a flag to skip DB connections during initialization
+func WithSkipConnections(ctx context.Context) context.Context {
+	return context.WithValue(ctx, skipConnectionsKey{}, true)
+}
+
+// ShouldSkipConnections checks if DB connections should be skipped
+func ShouldSkipConnections(ctx context.Context) bool {
+	return ctx.Value(skipConnectionsKey{}) == true
+}

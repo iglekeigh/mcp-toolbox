@@ -69,17 +69,25 @@ func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.So
 		return nil, fmt.Errorf("error in User Agent retrieval: %s", err)
 	}
 	endpoint := fmt.Sprintf("%s-dataproc.googleapis.com:443", r.Region)
-	client, err := dataproc.NewClusterControllerClient(ctx, option.WithEndpoint(endpoint), option.WithUserAgent(ua))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create dataproc client: %w", err)
-	}
-	opsClient, err := longrunning.NewOperationsClient(ctx, option.WithEndpoint(endpoint), option.WithUserAgent(ua))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create longrunning client: %w", err)
-	}
-	jobClient, err := dataproc.NewJobControllerClient(ctx, option.WithEndpoint(endpoint), option.WithUserAgent(ua))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create dataproc job client: %w", err)
+
+	var client *dataproc.ClusterControllerClient
+	var opsClient *longrunning.OperationsClient
+	var jobClient *dataproc.JobControllerClient
+
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		client, err = dataproc.NewClusterControllerClient(ctx, option.WithEndpoint(endpoint), option.WithUserAgent(ua))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create dataproc client: %w", err)
+		}
+		opsClient, err = longrunning.NewOperationsClient(ctx, option.WithEndpoint(endpoint), option.WithUserAgent(ua))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create longrunning client: %w", err)
+		}
+		jobClient, err = dataproc.NewJobControllerClient(ctx, option.WithEndpoint(endpoint), option.WithUserAgent(ua))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create dataproc job client: %w", err)
+		}
 	}
 
 	s := &Source{

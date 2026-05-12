@@ -23,6 +23,7 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/sources"
 	"github.com/googleapis/mcp-toolbox/internal/sources/snowflake"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 )
 
 func TestParseFromYamlSnowflake(t *testing.T) {
@@ -120,3 +121,32 @@ func TestFailParseFromYaml(t *testing.T) {
 		})
 	}
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := snowflake.Config{
+		Name:     "test-source",
+		Type:     snowflake.SourceType,
+		Account:  "a",
+		User:     "u",
+		Password: "pw",
+		Database: "d",
+		Schema:   "s",
+	}
+
+	ctx := testutils.ContextWithUserAgent(util.WithSkipConnections(context.Background()), "test-agent")
+	source, err := cfg.Initialize(ctx, nil)
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != snowflake.SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), snowflake.SourceType)
+	}
+}
+

@@ -12,6 +12,7 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/server"
 	"github.com/googleapis/mcp-toolbox/internal/sources"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 )
 
 func TestParseFromYamlOracle(t *testing.T) {
@@ -286,3 +287,30 @@ func TestRunSQLExecutesDML(t *testing.T) {
 			"DML path may not have been executed")
 	}
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		Name:             "test-source",
+		Type:             SourceType,
+		ConnectionString: "cs",
+		User:             "u",
+		Password:         "pw",
+	}
+
+	ctx := testutils.ContextWithUserAgent(util.WithSkipConnections(context.Background()), "test-agent")
+	source, err := cfg.Initialize(ctx, nil)
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), SourceType)
+	}
+}
+

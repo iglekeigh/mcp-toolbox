@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/goccy/go-yaml"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 )
 
 func TestCockroachDBSourceConfig(t *testing.T) {
@@ -222,3 +223,32 @@ func TestConvertParamMapToRawQuery(t *testing.T) {
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		Name:           "test-source",
+		Type:           SourceType,
+		Host:           "h",
+		Port:           "p",
+		User:           "u",
+		Database:       "d",
+		RetryBaseDelay: "500ms",
+	}
+
+	ctx := util.WithSkipConnections(context.Background())
+	source, err := cfg.Initialize(ctx, nil)
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), SourceType)
+	}
+}
+

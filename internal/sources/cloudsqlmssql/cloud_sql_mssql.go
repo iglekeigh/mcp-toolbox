@@ -67,16 +67,21 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	// Initializes a Cloud SQL MSSQL source
-	db, err := initCloudSQLMssqlConnection(ctx, tracer, r.Name, r.Project, r.Region, r.Instance, r.IPType.String(), r.User, r.Password, r.Database)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create db connection: %w", err)
-	}
+	var db *sql.DB
 
-	// Verify db connection
-	err = db.PingContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect successfully: %w", err)
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		// Initializes a Cloud SQL MSSQL source
+		db, err = initCloudSQLMssqlConnection(ctx, tracer, r.Name, r.Project, r.Region, r.Instance, r.IPType.String(), r.User, r.Password, r.Database)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create db connection: %w", err)
+		}
+
+		// Verify db connection
+		err = db.PingContext(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to connect successfully: %w", err)
+		}
 	}
 
 	s := &Source{

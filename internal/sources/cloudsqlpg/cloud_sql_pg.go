@@ -64,22 +64,27 @@ func (r Config) SourceConfigType() string {
 }
 
 func (r Config) Initialize(ctx context.Context, tracer trace.Tracer) (sources.Source, error) {
-	pool, err := initCloudSQLPgConnectionPool(ctx, tracer, r.Name, r.Project, r.Region, r.Instance, r.IPType.String(), r.User, r.Password, r.Database)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create pool: %w", err)
-	}
+	var pool *pgxpool.Pool
 
-	err = pool.Ping(ctx)
-	if err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("unable to connect successfully: %w", err)
-	}
+	if !util.ShouldSkipConnections(ctx) {
+		var err error
+		pool, err = initCloudSQLPgConnectionPool(ctx, tracer, r.Name, r.Project, r.Region, r.Instance, r.IPType.String(), r.User, r.Password, r.Database)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create pool: %w", err)
+		}
 
-	var res int
-	err = pool.QueryRow(ctx, "SELECT 1").Scan(&res)
-	if err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("failed to execute 'SELECT 1' after connection: %w", err)
+		err = pool.Ping(ctx)
+		if err != nil {
+			pool.Close()
+			return nil, fmt.Errorf("unable to connect successfully: %w", err)
+		}
+
+		var res int
+		err = pool.QueryRow(ctx, "SELECT 1").Scan(&res)
+		if err != nil {
+			pool.Close()
+			return nil, fmt.Errorf("failed to execute 'SELECT 1' after connection: %w", err)
+		}
 	}
 
 	s := &Source{

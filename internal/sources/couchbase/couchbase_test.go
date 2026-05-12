@@ -23,6 +23,7 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/sources"
 	"github.com/googleapis/mcp-toolbox/internal/sources/couchbase"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/internal/util"
 )
 
 func TestParseFromYamlCouchbase(t *testing.T) {
@@ -151,3 +152,30 @@ func TestFailParseFromYaml(t *testing.T) {
 		})
 	}
 }
+
+func TestInitialize_SkipConnections(t *testing.T) {
+	t.Parallel()
+
+	cfg := couchbase.Config{
+		Name:             "test-source",
+		Type:             couchbase.SourceType,
+		ConnectionString: "cs",
+		Bucket:           "b",
+		Scope:            "s",
+	}
+
+	ctx := util.WithSkipConnections(context.Background())
+	source, err := cfg.Initialize(ctx, nil)
+	if err != nil {
+		t.Fatalf("Initialize with skip flag failed: %v", err)
+	}
+
+	if source == nil {
+		t.Fatal("source should not be nil")
+	}
+
+	if source.SourceType() != couchbase.SourceType {
+		t.Errorf("SourceType() = %q, want %q", source.SourceType(), couchbase.SourceType)
+	}
+}
+
