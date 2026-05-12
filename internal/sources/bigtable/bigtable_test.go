@@ -132,4 +132,3 @@ func TestInitialize_SkipConnections(t *testing.T) {
 		t.Errorf("SourceType() = %q, want %q", source.SourceType(), bigtable.SourceType)
 	}
 }
-
