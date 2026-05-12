@@ -154,10 +154,10 @@ Use the format: `Fixes #<issue_number> 🦕`
 
 1.  Create a new directory: `internal/sources/<newdb>`.
 2.  Define `Config` and `Source` structs in `internal/sources/<newdb>/<newdb>.go`.
-3.  Implement `SourceConfig` interface (`SourceConfigType`, `Initialize`).
+3.  Implement `SourceConfig` interface (`SourceConfigType`, `Initialize`). **CRITICAL:** Wrap active network connections/pinging inside `if !util.ShouldSkipConnections(ctx)` to support offline operations like skills generation.
 4.  Implement `Source` interface (`SourceType`).
 5.  Implement `init()` to register the source.
-6.  Add unit tests in `internal/sources/<newdb>/<newdb>_test.go`.
+6.  Add unit tests in `internal/sources/<newdb>/<newdb>_test.go`, including tests verifying connection bypass behavior when `util.WithSkipConnections(ctx)` is passed.
 
 ### Adding a New Tool
 
