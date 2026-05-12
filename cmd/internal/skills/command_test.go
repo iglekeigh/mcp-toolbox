@@ -439,4 +439,3 @@ tools:
 		t.Fatalf("skill directory not created: %s", skillPath)
 	}
 }
-
