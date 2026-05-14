@@ -26,9 +26,7 @@ type ToolsetConfig struct {
 
 type Toolset struct {
 	ToolsetConfig
-	Tools       []*Tool         `yaml:",inline"`
-	Manifest    ToolsetManifest `yaml:",inline"`
-	McpManifest []McpManifest   `yaml:",inline"`
+	Tools       []*Tool `yaml:",inline"`
 	toolNameSet map[string]struct{}
 }
 
@@ -63,12 +61,7 @@ func (t ToolsetConfig) Initialize(serverVersion string, toolsMap map[string]Tool
 	toolset := Toolset{
 		ToolsetConfig: t,
 		Tools:         make([]*Tool, 0, len(t.ToolNames)),
-		Manifest: ToolsetManifest{
-			ServerVersion: serverVersion,
-			ToolsManifest: make(map[string]Manifest),
-		},
-		McpManifest: make([]McpManifest, 0, len(t.ToolNames)),
-		toolNameSet: make(map[string]struct{}, len(t.ToolNames)),
+		toolNameSet:   make(map[string]struct{}, len(t.ToolNames)),
 	}
 	if !IsValidName(toolset.Name) {
 		return toolset, fmt.Errorf("invalid toolset name: %s", toolset.Name)
@@ -79,11 +72,47 @@ func (t ToolsetConfig) Initialize(serverVersion string, toolsMap map[string]Tool
 			return toolset, fmt.Errorf("tool does not exist: %s", toolName)
 		}
 		toolset.Tools = append(toolset.Tools, &tool)
-		toolset.Manifest.ToolsManifest[toolName] = tool.Manifest()
-		toolset.McpManifest = append(toolset.McpManifest, tool.McpManifest())
 		toolset.toolNameSet[toolName] = struct{}{}
 	}
 	return toolset, nil
+}
+
+// BuildManifest computes the toolset manifest at call time, using dynamic
+// manifest resolution for tools that implement DynamicManifestTool.
+func (t Toolset) BuildManifest(serverVersion string, sp SourceProvider) ToolsetManifest {
+	m := ToolsetManifest{
+		ServerVersion: serverVersion,
+		ToolsManifest: make(map[string]Manifest, len(t.Tools)),
+	}
+	for i, tool := range t.Tools {
+		if tool == nil {
+			continue
+		}
+		toolName := t.ToolNames[i]
+		if dt, ok := (*tool).(DynamicManifestTool); ok {
+			m.ToolsManifest[toolName] = dt.DynamicManifest(sp)
+		} else {
+			m.ToolsManifest[toolName] = (*tool).Manifest()
+		}
+	}
+	return m
+}
+
+// BuildMcpManifest computes the MCP manifest slice at call time, using dynamic
+// manifest resolution for tools that implement DynamicManifestTool.
+func (t Toolset) BuildMcpManifest(sp SourceProvider) []McpManifest {
+	result := make([]McpManifest, 0, len(t.Tools))
+	for _, tool := range t.Tools {
+		if tool == nil {
+			continue
+		}
+		if dt, ok := (*tool).(DynamicManifestTool); ok {
+			result = append(result, dt.DynamicMcpManifest(sp))
+		} else {
+			result = append(result, (*tool).McpManifest())
+		}
+	}
+	return result
 }
 
 var validName = regexp.MustCompile(`^[a-zA-Z0-9_-]*$`)

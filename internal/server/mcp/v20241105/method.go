@@ -40,7 +40,7 @@ func ProcessMethod(ctx context.Context, id jsonrpc.RequestId, method string, too
 	case PING:
 		return pingHandler(id)
 	case TOOLS_LIST:
-		return toolsListHandler(id, toolset, body)
+		return toolsListHandler(id, toolset, resourceMgr, body)
 	case TOOLS_CALL:
 		return toolsCallHandler(ctx, id, toolset, resourceMgr, body, header)
 	case PROMPTS_LIST:
@@ -62,7 +62,7 @@ func pingHandler(id jsonrpc.RequestId) (any, error) {
 	}, nil
 }
 
-func toolsListHandler(id jsonrpc.RequestId, toolset tools.Toolset, body []byte) (any, error) {
+func toolsListHandler(id jsonrpc.RequestId, toolset tools.Toolset, sp tools.SourceProvider, body []byte) (any, error) {
 	var req ListToolsRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		err = fmt.Errorf("invalid mcp tools list request: %w", err)
@@ -70,8 +70,9 @@ func toolsListHandler(id jsonrpc.RequestId, toolset tools.Toolset, body []byte) 
 	}
 
 	// exclude annotations from this version
-	manifests := make([]tools.McpManifest, len(toolset.McpManifest))
-	for i, m := range toolset.McpManifest {
+	raw := toolset.BuildMcpManifest(sp)
+	manifests := make([]tools.McpManifest, len(raw))
+	for i, m := range raw {
 		m.Annotations = nil
 		manifests[i] = m
 	}
@@ -210,7 +211,7 @@ func toolsCallHandler(ctx context.Context, id jsonrpc.RequestId, toolset tools.T
 	}
 	logger.DebugContext(ctx, "tool invocation authorized")
 
-	params, err := parameters.ParseParams(tool.GetParameters(), data, claimsFromAuth)
+	params, err := parameters.ParseParams(tool.GetParameters(resourceMgr), data, claimsFromAuth)
 	if err != nil {
 		err = fmt.Errorf("provided parameters were invalid: %w", err)
 		return jsonrpc.NewError(id, jsonrpc.INVALID_PARAMS, err.Error(), nil), err
@@ -218,7 +219,7 @@ func toolsCallHandler(ctx context.Context, id jsonrpc.RequestId, toolset tools.T
 	logger.DebugContext(ctx, fmt.Sprintf("invocation params: %s", params))
 
 	embeddingModels := resourceMgr.GetEmbeddingModelMap()
-	params, err = tool.EmbedParams(ctx, params, embeddingModels)
+	params, err = tool.EmbedParams(ctx, resourceMgr, params, embeddingModels)
 	if err != nil {
 		err = fmt.Errorf("error embedding parameters: %w", err)
 		return jsonrpc.NewError(id, jsonrpc.INVALID_PARAMS, err.Error(), nil), err

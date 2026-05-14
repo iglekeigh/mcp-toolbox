@@ -72,7 +72,7 @@ func toolsetHandler(s *Server, w http.ResponseWriter, r *http.Request) {
 		_ = render.Render(w, r, newErrResponse(err, http.StatusNotFound))
 		return
 	}
-	render.JSON(w, r, toolset.Manifest)
+	render.JSON(w, r, toolset.BuildManifest(s.version, s.ResourceMgr))
 }
 
 // toolGetHandler handles requests for a single Tool.
@@ -99,10 +99,14 @@ func toolGetHandler(s *Server, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// TODO: this can be optimized later with some caching
+	manifest := tool.Manifest()
+	if dt, ok := tool.(tools.DynamicManifestTool); ok {
+		manifest = dt.DynamicManifest(s.ResourceMgr)
+	}
 	m := tools.ToolsetManifest{
 		ServerVersion: s.version,
 		ToolsManifest: map[string]tools.Manifest{
-			toolName: tool.Manifest(),
+			toolName: manifest,
 		},
 	}
 
@@ -198,7 +202,7 @@ func toolInvokeHandler(s *Server, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params, err := parameters.ParseParams(tool.GetParameters(), data, claimsFromAuth)
+	params, err := parameters.ParseParams(tool.GetParameters(s.ResourceMgr), data, claimsFromAuth)
 	if err != nil {
 		var clientServerErr *util.ClientServerError
 
@@ -226,7 +230,7 @@ func toolInvokeHandler(s *Server, w http.ResponseWriter, r *http.Request) {
 	}
 	s.logger.DebugContext(ctx, fmt.Sprintf("invocation params: %s", params))
 
-	params, err = tool.EmbedParams(ctx, params, s.ResourceMgr.GetEmbeddingModelMap())
+	params, err = tool.EmbedParams(ctx, s.ResourceMgr, params, s.ResourceMgr.GetEmbeddingModelMap())
 	if err != nil {
 		err = fmt.Errorf("error embedding parameters: %w", err)
 		s.logger.DebugContext(ctx, err.Error())

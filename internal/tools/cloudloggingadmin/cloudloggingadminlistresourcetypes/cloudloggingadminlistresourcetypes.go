@@ -115,7 +115,7 @@ func (t Tool) ParseParams(data map[string]any, claimsMap map[string]map[string]a
 	return parameters.ParamValues{}, nil
 }
 
-func (t Tool) EmbedParams(ctx context.Context, paramValues parameters.ParamValues, embeddingModelsMap map[string]embeddingmodels.EmbeddingModel) (parameters.ParamValues, error) {
+func (t Tool) EmbedParams(ctx context.Context, _ tools.SourceProvider, paramValues parameters.ParamValues, embeddingModelsMap map[string]embeddingmodels.EmbeddingModel) (parameters.ParamValues, error) {
 	return paramValues, nil
 }
 
@@ -147,7 +147,7 @@ func (t Tool) GetAuthTokenHeaderName(resourceMgr tools.SourceProvider) (string, 
 	return "Authorization", nil
 }
 
-func (t Tool) GetParameters() parameters.Parameters {
+func (t Tool) GetParameters(_ tools.SourceProvider) parameters.Parameters {
 	return t.Parameters
 }
 

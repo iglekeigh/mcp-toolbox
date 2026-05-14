@@ -72,23 +72,8 @@ func (cfg Config) ToolConfigType() string {
 }
 
 // Initialize initializes the tool from the configuration.
-func (cfg Config) Initialize(srcs map[string]sources.Source) (tools.Tool, error) {
-	rawS, ok := srcs[cfg.Source]
-	if !ok {
-		return nil, fmt.Errorf("no source named %q configured", cfg.Source)
-	}
-	s, ok := rawS.(compatibleSource)
-	if !ok {
-		return nil, fmt.Errorf("invalid source for %q tool: source type must be `cloud-sql-admin`", resourceType)
-	}
-
-	project := s.GetDefaultProject()
-	var projectParam parameters.Parameter
-	if project != "" {
-		projectParam = parameters.NewStringParameterWithDefault("project", project, "The GCP project ID. This is pre-configured; do not ask for it unless the user explicitly provides a different one.")
-	} else {
-		projectParam = parameters.NewStringParameter("project", "The project ID")
-	}
+func (cfg Config) Initialize(_ map[string]sources.Source) (tools.Tool, error) {
+	projectParam := parameters.NewStringParameter("project", "The project ID")
 
 	allParameters := parameters.Parameters{
 		projectParam,
@@ -108,7 +93,6 @@ func (cfg Config) Initialize(srcs map[string]sources.Source) (tools.Tool, error)
 
 	return Tool{
 		Config:      cfg,
-		AllParams:   allParameters,
 		manifest:    tools.Manifest{Description: cfg.Description, Parameters: paramManifest, AuthRequired: cfg.AuthRequired},
 		mcpManifest: mcpManifest,
 	}, nil
@@ -117,7 +101,6 @@ func (cfg Config) Initialize(srcs map[string]sources.Source) (tools.Tool, error)
 // Tool represents the create-instances tool.
 type Tool struct {
 	Config
-	AllParams   parameters.Parameters `yaml:"allParams"`
 	manifest    tools.Manifest
 	mcpManifest tools.McpManifest
 }
@@ -180,8 +163,8 @@ func (t Tool) Invoke(ctx context.Context, resourceMgr tools.SourceProvider, para
 	return resp, nil
 }
 
-func (t Tool) EmbedParams(ctx context.Context, paramValues parameters.ParamValues, embeddingModelsMap map[string]embeddingmodels.EmbeddingModel) (parameters.ParamValues, error) {
-	return parameters.EmbedParams(ctx, t.AllParams, paramValues, embeddingModelsMap, nil)
+func (t Tool) EmbedParams(ctx context.Context, sp tools.SourceProvider, paramValues parameters.ParamValues, embeddingModelsMap map[string]embeddingmodels.EmbeddingModel) (parameters.ParamValues, error) {
+	return parameters.EmbedParams(ctx, t.dynamicParams(sp), paramValues, embeddingModelsMap, nil)
 }
 
 // Manifest returns the tool's manifest.
@@ -192,6 +175,42 @@ func (t Tool) Manifest() tools.Manifest {
 // McpManifest returns the tool's MCP manifest.
 func (t Tool) McpManifest() tools.McpManifest {
 	return t.mcpManifest
+}
+
+func (t Tool) dynamicParams(sp tools.SourceProvider) parameters.Parameters {
+	var projectParam parameters.Parameter
+	if s, err := tools.GetCompatibleSource[compatibleSource](sp, t.Source, t.Name, t.Type); err == nil {
+		if p := s.GetDefaultProject(); p != "" {
+			projectParam = parameters.NewStringParameterWithDefault("project", p, "The GCP project ID. This is pre-configured; do not ask for it unless the user explicitly provides a different one.")
+		}
+	}
+	if projectParam == nil {
+		projectParam = parameters.NewStringParameter("project", "The project ID")
+	}
+	return parameters.Parameters{
+		projectParam,
+		parameters.NewStringParameter("name", "The name of the instance"),
+		parameters.NewStringParameterWithDefault("databaseVersion", "POSTGRES_17", "The database version for Postgres. If not specified, defaults to the latest available version (e.g., POSTGRES_17)."),
+		parameters.NewStringParameter("rootPassword", "The root password for the instance"),
+		parameters.NewStringParameterWithDefault("editionPreset", "Development", "The edition of the instance. Can be `Production` or `Development`. This determines the default machine type and availability. Defaults to `Development`."),
+	}
+}
+
+// DynamicManifest returns the manifest with source-specific defaults resolved at call time.
+func (t Tool) DynamicManifest(sp tools.SourceProvider) tools.Manifest {
+	allParams := t.dynamicParams(sp)
+	return tools.Manifest{Description: t.Description, Parameters: allParams.Manifest(), AuthRequired: t.AuthRequired}
+}
+
+// DynamicMcpManifest returns the MCP manifest with source-specific defaults resolved at call time.
+func (t Tool) DynamicMcpManifest(sp tools.SourceProvider) tools.McpManifest {
+	allParams := t.dynamicParams(sp)
+	description := t.Description
+	if description == "" {
+		description = "Creates a Postgres instance using `Production` and `Development` presets. For the `Development` template, it chooses a 2 vCPU, 16 GiB RAM, 100 GiB SSD configuration with Non-HA/zonal availability. For the `Production` template, it chooses an 8 vCPU, 64 GiB RAM, 250 GiB SSD configuration with HA/regional availability. The Enterprise Plus edition is used in both cases. The default database version is `POSTGRES_17`. The agent should ask the user if they want to use a different version."
+	}
+	annotations := tools.GetAnnotationsOrDefault(t.Annotations, tools.NewDestructiveAnnotations)
+	return tools.GetMcpManifest(t.Name, description, t.AuthRequired, allParams, annotations)
 }
 
 // Authorized checks if the tool is authorized.
@@ -211,8 +230,8 @@ func (t Tool) GetAuthTokenHeaderName(resourceMgr tools.SourceProvider) (string, 
 	return "Authorization", nil
 }
 
-func (t Tool) GetParameters() parameters.Parameters {
-	return t.AllParams
+func (t Tool) GetParameters(sp tools.SourceProvider) parameters.Parameters {
+	return t.dynamicParams(sp)
 }
 
 func (t Tool) GetScopesRequired() []string {

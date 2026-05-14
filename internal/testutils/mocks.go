@@ -101,7 +101,7 @@ func (t MockTool) ParseParams(data map[string]any, claimsMap map[string]map[stri
 	return parameters.ParseParams(t.Params, data, claimsMap)
 }
 
-func (t MockTool) EmbedParams(ctx context.Context, paramValues parameters.ParamValues, embeddingModelsMap map[string]embeddingmodels.EmbeddingModel) (parameters.ParamValues, error) {
+func (t MockTool) EmbedParams(ctx context.Context, _ tools.SourceProvider, paramValues parameters.ParamValues, embeddingModelsMap map[string]embeddingmodels.EmbeddingModel) (parameters.ParamValues, error) {
 	return parameters.EmbedParams(ctx, t.Params, paramValues, embeddingModelsMap, nil)
 }
 
@@ -119,7 +119,7 @@ func (t MockTool) RequiresClientAuthorization(tools.SourceProvider) (bool, error
 	return t.requireClientAuthorization, nil
 }
 
-func (t MockTool) GetParameters() parameters.Parameters {
+func (t MockTool) GetParameters(_ tools.SourceProvider) parameters.Parameters {
 	return t.Params
 }
 

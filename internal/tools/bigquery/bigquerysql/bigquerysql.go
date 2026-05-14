@@ -313,7 +313,7 @@ func formatVectorForBigQuery(vectorFloats []float32) any {
 	return res
 }
 
-func (t Tool) EmbedParams(ctx context.Context, paramValues parameters.ParamValues, embeddingModelsMap map[string]embeddingmodels.EmbeddingModel) (parameters.ParamValues, error) {
+func (t Tool) EmbedParams(ctx context.Context, _ tools.SourceProvider, paramValues parameters.ParamValues, embeddingModelsMap map[string]embeddingmodels.EmbeddingModel) (parameters.ParamValues, error) {
 	return parameters.EmbedParams(ctx, t.AllParams, paramValues, embeddingModelsMap, formatVectorForBigQuery)
 }
 
@@ -345,7 +345,7 @@ func (t Tool) GetAuthTokenHeaderName(resourceMgr tools.SourceProvider) (string, 
 	return source.GetAuthTokenHeaderName(), nil
 }
 
-func (t Tool) GetParameters() parameters.Parameters {
+func (t Tool) GetParameters(_ tools.SourceProvider) parameters.Parameters {
 	return t.AllParams
 }
 

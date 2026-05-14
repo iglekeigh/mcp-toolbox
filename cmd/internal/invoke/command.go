@@ -96,14 +96,14 @@ func runInvoke(cmd *cobra.Command, args []string, opts *internal.ToolboxOptions)
 		}
 	}
 
-	parsedParams, err := parameters.ParseParams(tool.GetParameters(), params, nil)
+	parsedParams, err := parameters.ParseParams(tool.GetParameters(resourceMgr), params, nil)
 	if err != nil {
 		errMsg := fmt.Errorf("invalid parameters: %w", err)
 		opts.Logger.ErrorContext(ctx, errMsg.Error())
 		return errMsg
 	}
 
-	parsedParams, err = tool.EmbedParams(ctx, parsedParams, resourceMgr.GetEmbeddingModelMap())
+	parsedParams, err = tool.EmbedParams(ctx, resourceMgr, parsedParams, resourceMgr.GetEmbeddingModelMap())
 	if err != nil {
 		errMsg := fmt.Errorf("error embedding parameters: %w", err)
 		opts.Logger.ErrorContext(ctx, errMsg.Error())

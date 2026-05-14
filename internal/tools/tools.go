@@ -115,15 +115,25 @@ func (token AccessToken) ParseBearerToken() (string, error) {
 
 type Tool interface {
 	Invoke(context.Context, SourceProvider, parameters.ParamValues, AccessToken) (any, util.ToolboxError)
-	EmbedParams(context.Context, parameters.ParamValues, map[string]embeddingmodels.EmbeddingModel) (parameters.ParamValues, error)
+	EmbedParams(context.Context, SourceProvider, parameters.ParamValues, map[string]embeddingmodels.EmbeddingModel) (parameters.ParamValues, error)
 	Manifest() Manifest
 	McpManifest() McpManifest
 	Authorized([]string) bool
 	RequiresClientAuthorization(SourceProvider) (bool, error)
 	ToConfig() ToolConfig
 	GetAuthTokenHeaderName(SourceProvider) (string, error)
-	GetParameters() parameters.Parameters
+	GetParameters(SourceProvider) parameters.Parameters
 	GetScopesRequired() []string
+}
+
+// DynamicManifestTool is an opt-in extension of Tool for tools whose manifest
+// depends on runtime source state (e.g. a source-configured default project).
+// Callers with a SourceProvider should prefer these methods over the static
+// Manifest()/McpManifest().
+type DynamicManifestTool interface {
+	Tool
+	DynamicManifest(SourceProvider) Manifest
+	DynamicMcpManifest(SourceProvider) McpManifest
 }
 
 // SourceProvider defines the minimal view of the server.ResourceManager
