@@ -713,7 +713,7 @@ func TestMcpEndpoint(t *testing.T) {
 						Id:      "missing-method",
 						Request: jsonrpc.Request{},
 					},
-					wantStatusCode: http.StatusOK,
+					wantStatusCode: http.StatusNotFound,
 					want: map[string]any{
 						"jsonrpc": "2.0",
 						"id":      "missing-method",
@@ -734,7 +734,7 @@ func TestMcpEndpoint(t *testing.T) {
 							Method: "foo",
 						},
 					},
-					wantStatusCode: http.StatusOK,
+					wantStatusCode: http.StatusNotFound,
 					want: map[string]any{
 						"jsonrpc": "2.0",
 						"id":      "invalid-method",
@@ -914,24 +914,46 @@ func TestMcpEndpoint(t *testing.T) {
 }
 
 func TestInvalidProtocolVersionHeader(t *testing.T) {
-	r, shutdown := setUpServer(t, "mcp", nil, nil, nil, nil)
+	mockTools := []testutils.MockTool{tool1, tool2, tool3, tool4, tool5}
+	mockPrompts := []testutils.MockPrompt{prompt1}
+	toolsMap, toolsets, promptsMap, promptsets := setUpResources(t, mockTools, mockPrompts)
+	r, shutdown := setUpServer(t, "mcp", toolsMap, toolsets, promptsMap, promptsets)
 	defer shutdown()
 	ts := runServer(r, false)
 	defer ts.Close()
 
+	reqBody := jsonrpc.JSONRPCRequest{
+		Jsonrpc: jsonrpcVersion,
+		Id:      "tools-list",
+		Request: jsonrpc.Request{
+			Method: "tools/list",
+		},
+	}
+	reqMarshal, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("unexpected error during marshaling of body")
+	}
 	header := map[string]string{}
 	header["MCP-Protocol-Version"] = "foo"
 
-	resp, body, err := runRequest(ts, http.MethodPost, "/", nil, header)
+	resp, body, err := runRequest(ts, http.MethodPost, "/", bytes.NewBuffer(reqMarshal), header)
 	if resp.Status != "400 Bad Request" {
-		t.Fatalf("unexpected status: %s", resp.Status)
+		t.Fatalf("unexpected status: %s; %s", resp.Status, body)
 	}
 	var got map[string]any
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatalf("unexpected error unmarshalling body: %s", err)
 	}
-	want := "invalid protocol version: foo"
-	if got["error"] != want {
+	errMap, ok := got["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected 'error' field to be a map, got %T", got["error"])
+	}
+	msg, ok := errMap["message"].(string)
+	if !ok {
+		t.Fatalf("expected 'message' field to be a string, got %T", errMap["message"])
+	}
+	want := "unsupported protocol version"
+	if msg != want {
 		t.Fatalf("unexpected error message: got %s, want %s", got["error"], want)
 	}
 	if err != nil {

@@ -28,6 +28,7 @@ import (
 	"github.com/googleapis/mcp-toolbox/internal/auth/generic"
 	"github.com/googleapis/mcp-toolbox/internal/prompts"
 	"github.com/googleapis/mcp-toolbox/internal/server/mcp/jsonrpc"
+	mcputil "github.com/googleapis/mcp-toolbox/internal/server/mcp/util"
 	"github.com/googleapis/mcp-toolbox/internal/server/resources"
 	"github.com/googleapis/mcp-toolbox/internal/tools"
 	"github.com/googleapis/mcp-toolbox/internal/util"
@@ -39,11 +40,48 @@ import (
 
 // ProcessMethod returns a response for the request.
 func ProcessMethod(ctx context.Context, id jsonrpc.RequestId, method string, toolset tools.Toolset, promptset prompts.Promptset, resourceMgr *resources.ResourceManager, body []byte, header http.Header) (any, error) {
+	var req GenericRequestParam
+	if err := json.Unmarshal(body, &req); err != nil {
+		err = fmt.Errorf("missing params field from request: %w", err)
+		return jsonrpc.NewError(id, jsonrpc.INVALID_REQUEST, err.Error(), nil), err
+	}
+	// Check _meta field for protocol version
+	if req.Params.Meta != nil {
+		// check for protocol version metadata
+		v := req.Params.Meta.ProtocolVersion
+		if v == "" {
+			metaErr := fmt.Errorf("missing io.modelcontextprotocol/protocolVersion")
+			return jsonrpc.NewError(id, jsonrpc.INVALID_PARAMS, metaErr.Error(), nil), metaErr
+		}
+		// do not have to verify header for stdio. stdio header will be nil.
+		if header != nil {
+			if PROTOCOL_VERSION != v {
+				metaErr := fmt.Errorf("header mismatch: MCP-Protocol-Version header value '%s' does not match body value '%s'", PROTOCOL_VERSION, v)
+				return jsonrpc.NewHeaderMismatchedError(id, metaErr), metaErr
+			}
+		}
+
+		// check for clientInfo
+		clientInfo := req.Params.Meta.ClientInfo
+		if clientInfo.Version == "" || clientInfo.Name == "" {
+			metaErr := fmt.Errorf("missing field from io.modelcontextprotocol/clientInfo")
+			return jsonrpc.NewError(id, jsonrpc.INVALID_PARAMS, metaErr.Error(), nil), metaErr
+		}
+		// check for clientCapabilities
+		clientCapabilities := req.Params.Meta.MetaClientCapabilities
+		if clientCapabilities == nil {
+			metaErr := fmt.Errorf("missing field from io.modelcontextprotocol/clientCapabilities")
+			return jsonrpc.NewError(id, jsonrpc.INVALID_PARAMS, metaErr.Error(), nil), metaErr
+		}
+		// skip checking clientCapabilities since Toolbox do not utilize any of those
+	} else {
+		metaErr := fmt.Errorf("missing required fields in request metadata")
+		return jsonrpc.NewError(id, jsonrpc.INVALID_PARAMS, metaErr.Error(), nil), metaErr
+	}
+
 	switch method {
-	case INITIALIZE:
-		return initializeHandler(ctx, id, body)
-	case PING:
-		return pingHandler(id)
+	case SERVER_DISCOVER:
+		return serverDiscoverHandler(ctx, id, body)
 	case TOOLS_LIST:
 		return toolsListHandler(id, resourceMgr, toolset, body)
 	case TOOLS_CALL:
@@ -58,25 +96,22 @@ func ProcessMethod(ctx context.Context, id jsonrpc.RequestId, method string, too
 	}
 }
 
-// InitializeResponse runs capability negotiation and protocol version agreement.
-// This is the Initialization phase of the lifecycle for MCP client-server connections.
-// Always start with the latest protocol version supported.
-func initializeHandler(ctx context.Context, id jsonrpc.RequestId, body []byte) (any, error) {
+func serverDiscoverHandler(ctx context.Context, id jsonrpc.RequestId, body []byte) (any, error) {
 	v, err := util.ToolboxVersionFromContext(ctx)
 	if err != nil {
 		return jsonrpc.NewError(id, jsonrpc.INTERNAL_ERROR, err.Error(), nil), err
 	}
 
-	var req InitializeRequest
+	var req DiscoverRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		err = fmt.Errorf("invalid mcp initialize request: %w", err)
+		err = fmt.Errorf("invalid server discover request: %w", err)
 		return jsonrpc.NewError(id, jsonrpc.INVALID_REQUEST, err.Error(), nil), err
 	}
 
 	toolsListChanged := false
 	promptsListChanged := false
-	result := InitializeResult{
-		ProtocolVersion: PROTOCOL_VERSION,
+	result := DiscoverResult{
+		SupportedVersions: mcputil.SUPPORTED_PROTOCOL_VERSIONS,
 		Capabilities: ServerCapabilities{
 			Tools: &ListChanged{
 				ListChanged: &toolsListChanged,
@@ -97,17 +132,7 @@ func initializeHandler(ctx context.Context, id jsonrpc.RequestId, body []byte) (
 		Id:      id,
 		Result:  result,
 	}
-
 	return res, nil
-}
-
-// pingHandler handles the "ping" method by returning an empty response.
-func pingHandler(id jsonrpc.RequestId) (any, error) {
-	return jsonrpc.JSONRPCResponse{
-		Jsonrpc: jsonrpc.JSONRPC_VERSION,
-		Id:      id,
-		Result:  struct{}{},
-	}, nil
 }
 
 func toolsListHandler(id jsonrpc.RequestId, resourceMgr *resources.ResourceManager, toolset tools.Toolset, body []byte) (any, error) {

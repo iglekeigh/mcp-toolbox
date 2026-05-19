@@ -541,11 +541,6 @@ func httpHandler(s *Server, w http.ResponseWriter, r *http.Request) {
 	// Only supported for v2025-06-18+.
 	headerProtocolVersion := r.Header.Get("MCP-Protocol-Version")
 	if headerProtocolVersion != "" {
-		if !mcp.VerifyProtocolVersion(headerProtocolVersion) {
-			err := fmt.Errorf("invalid protocol version: %s", headerProtocolVersion)
-			_ = render.Render(w, r, newErrResponse(err, http.StatusBadRequest))
-			return
-		}
 		protocolVersion = headerProtocolVersion
 	}
 
@@ -619,6 +614,14 @@ func httpHandler(s *Server, w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer resource_metadata="%s"%s`, s.toolboxUrl+"/.well-known/oauth-protected-resource", scopesArg))
 					w.WriteHeader(http.StatusUnauthorized)
 				}
+			}
+		case jsonrpc.METHOD_NOT_FOUND:
+			w.WriteHeader(http.StatusNotFound)
+		case jsonrpc.HEADER_MISMATCH:
+			w.WriteHeader(http.StatusBadRequest)
+		case jsonrpc.INVALID_PARAMS:
+			if strings.Contains(rpcResponse.Error.Message, "unsupported protocol version") {
+				w.WriteHeader(http.StatusBadRequest)
 			}
 		}
 	}
@@ -777,11 +780,12 @@ func processMcpMessage(ctx context.Context, body []byte, s *Server, protocolVers
 		return "", nil, err
 	}
 
-	// Add instrumentation to context for use in method handlers
+	// Add instrumentation and toolbox version to context for use in method handlers
 	ctx = util.WithInstrumentation(ctx, s.instrumentation)
-
+	ctx = util.WithToolboxVersionKey(ctx, s.version)
 	// Process the method
 	switch baseMessage.Method {
+	// This is only used for <v2026
 	case "initialize":
 		var initReq struct {
 			Params struct {
@@ -801,7 +805,6 @@ func processMcpMessage(ctx context.Context, body []byte, s *Server, protocolVers
 			version = mcputil.LATEST_PROTOCOL_VERSION
 		}
 
-		ctx = util.WithToolboxVersionKey(ctx, s.version)
 		result, err := mcp.ProcessMethod(ctx, version, baseMessage.Id, baseMessage.Method, tools.Toolset{}, prompts.Promptset{}, nil, body, nil)
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
