@@ -161,10 +161,6 @@ When implementing `Invoke()` or `ParseParams()`, you must return the appropriate
 *   **Agent Error**: Wrap database driver errors (syntax, constraint violations) in `AgentError`.
 *   **Server Error**: Wrap connection failures or internal logic crashes in `ClientServerError`.
 
-**In `ParseParams()`:**
-*   Return `ToolboxError` for missing required parameters or wrong types.
-*   Return `ClientServerError` for failures in resolving authenticated parameters (e.g., invalid tokens).
-
 **Example:**
 
 func (t *MyTool) Invoke(ctx context.Context, sp tools.SourceProvider, params parameters.ParamValues, token tools.AccessToken) (any, util.ToolboxError) {
@@ -206,7 +202,7 @@ implementation](https://github.com/googleapis/mcp-toolbox/blob/main/internal/sou
   name) and a `Source` struct to store necessary parameters for tools (e.g.,
   Name, Type, connection object, additional config).
 * **Implement the
-  [`SourceConfig`](https://github.com/googleapis/mcp-toolbox/blob/fd300dc606d88bf9f7bba689e2cee4e3565537dd/internal/sources/sources.go#L57)
+  [`SourceConfig`](https://github.com/googleapis/mcp-toolbox/blob/main/internal/sources/sources.go)
   interface**. This interface requires two methods:
   * `SourceConfigType() string`: Returns a unique string identifier for your
     data source (e.g., `"newdb"`).
@@ -214,7 +210,7 @@ implementation](https://github.com/googleapis/mcp-toolbox/blob/main/internal/sou
     Creates a new instance of your data source and establishes a connection to
     the database.
 * **Implement the
-  [`Source`](https://github.com/googleapis/mcp-toolbox/blob/fd300dc606d88bf9f7bba689e2cee4e3565537dd/internal/sources/sources.go#L63)
+  [`Source`](https://github.com/googleapis/mcp-toolbox/blob/main/internal/sources/sources.go)
   interface**. This interface requires one method:
   * `SourceType() string`: Returns the same string identifier as `SourceConfigType()`.
 * **Implement `init()`** to register the new Source.
@@ -236,23 +232,31 @@ Remember to keep your PRs small. For example, if you are contributing a new Sour
 Create a `Config` struct and a `Tool` struct to store necessary parameters for
 tools.
 * **Implement the
-  [`ToolConfig`](https://github.com/googleapis/mcp-toolbox/blob/fd300dc606d88bf9f7bba689e2cee4e3565537dd/internal/tools/tools.go#L61)
+  [`ToolConfig`](https://github.com/googleapis/mcp-toolbox/blob/main/internal/tools/tools.go)
   interface**. This interface requires one method:
   * `ToolConfigType() string`: Returns a unique string identifier for your tool
     (e.g., `"newdb-tool"`).
-  * `Initialize(sources map[string]Source) (Tool, error)`: Creates a new
+  * `Initialize(map[string]sources.Source) (Tool, error)`: Creates a new
     instance of your tool and validates that it can connect to the specified
     data source.
-* **Implement the `Tool` interface**. This interface requires the following
-  methods:
-  * `Invoke(ctx context.Context, params map[string]any) ([]any, error)`:
+* **Implement the `Tool` interface**. To satisfy the interface in Go, you must implement all 13 methods. However, your implementation effort will primarily focus on these **Core Methods**:
+  * `Invoke(ctx context.Context, sp SourceProvider, params parameters.ParamValues, token AccessToken) (any, util.ToolboxError)`:
     Executes the operation on the database using the provided parameters.
-  * `ParseParams(data map[string]any, claims map[string]map[string]any)
-    (ParamValues, error)`: Parses and validates the input parameters.
-  * `Manifest() Manifest`: Returns a manifest describing the tool's capabilities
-    and parameters.
-  * `Authorized(services []string) bool`: Checks if the tool is authorized to
-    run based on the provided authentication services.
+  * `GetParameters() parameters.Parameters`: Returns the parameters accepted by the tool.
+  * `Manifest() Manifest`: Returns a manifest describing the tool's capabilities and parameters.
+  * `ToConfig() ToolConfig`: Returns the configuration used to create the tool.
+  * `EmbedParams(context.Context, parameters.ParamValues, map[string]embeddingmodels.EmbeddingModel) (parameters.ParamValues, error)`:
+    Enriches parameters with vector embeddings if configured.
+
+  You must also implement the following **Metadata and Authorization** methods (which are often boilerplate):
+  * `GetName() string`: Returns the name of the tool.
+  * `GetDescription() string`: Returns a description of the tool.
+  * `GetAuthRequired() []string`: Returns the list of auth services required.
+  * `GetAnnotations() *ToolAnnotations`: Returns the MCP annotations (e.g., ReadOnly, Destructive).
+  * `Authorized(services []string) bool`: Checks if the tool is authorized based on the provided services.
+  * `RequiresClientAuthorization(SourceProvider) (bool, error)`: Returns if the tool requires client-side OIDC authorization.
+  * `GetAuthTokenHeaderName(SourceProvider) (string, error)`: Returns the header name for the auth token.
+  * `GetScopesRequired() []string`: Returns the OIDC scopes required by this tool.
 * **Implement `init()`** to register the new Tool.
 * **Implement Unit Tests** in a file named `newdbtool_test.go`.
 * **Implement Vector Search** if your new tool supports it. You must:

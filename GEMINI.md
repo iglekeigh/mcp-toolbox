@@ -164,7 +164,15 @@ Use the format: `Fixes #<issue_number> 🦕`
 1.  Create a new directory: `internal/tools/<newdb>/<toolname>`.
 2.  Define `Config` and `Tool` structs.
 3.  Implement `ToolConfig` interface (`ToolConfigType`, `Initialize`).
-4.  Implement `Tool` interface (`Invoke`, `ParseParams`, `Manifest`, `Authorized`).
+4.  Implement the `Tool` interface. You must implement all 13 methods. Focus on these **Core Methods**:
+    *   `Invoke`: Executes the operation using the provided parameters.
+    *   `GetParameters`: Returns the parameters accepted by the tool.
+    *   `Manifest`: Returns a manifest describing the tool's capabilities.
+    *   `ToConfig`: Returns the configuration used to create the tool.
+    *   `EmbedParams`: Enriches parameters with vector embeddings if configured.
+    
+    And the following **Metadata and Authorization** methods (often boilerplate):
+    *   `GetName`, `GetDescription`, `GetAuthRequired`, `GetAnnotations`, `Authorized`, `RequiresClientAuthorization`, `GetAuthTokenHeaderName`, `GetScopesRequired`.
 5.  Implement `init()` to register the tool.
 6.  Add unit tests.
 
