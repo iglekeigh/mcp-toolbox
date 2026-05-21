@@ -7,7 +7,6 @@
 // BANNER CONFIGURATION
 // ==========================================================================
 const BANNER_CONFIG = {
-  bannerId: "v1",
   title: "Announcement:",
   message: "Put your general announcement message here!",
   linkText: "Learn more",
