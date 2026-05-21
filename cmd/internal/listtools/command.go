@@ -46,6 +46,10 @@ func runListTools(cmd *cobra.Command, args []string, opts *internal.ToolboxOptio
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
 
+	if !cmd.Flags().Changed("log-level") {
+		_ = opts.Cfg.LogLevel.Set("warn")
+	}
+
 	ctx, shutdown, err := opts.Setup(ctx)
 	if err != nil {
 		return err

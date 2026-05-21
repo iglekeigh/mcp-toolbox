@@ -55,6 +55,10 @@ func runInvoke(cmd *cobra.Command, args []string, opts *internal.ToolboxOptions)
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
 
+	if !cmd.Flags().Changed("log-level") {
+		_ = opts.Cfg.LogLevel.Set("warn")
+	}
+
 	ctx, shutdown, err := opts.Setup(ctx)
 	if err != nil {
 		return err
@@ -62,8 +66,6 @@ func runInvoke(cmd *cobra.Command, args []string, opts *internal.ToolboxOptions)
 	defer func() {
 		_ = shutdown(ctx)
 	}()
-
-
 
 	// With SetInterspersed(false), args[0] is the tool name and args[1:] are the tool arguments.
 	toolArgs := args[1:]
@@ -257,7 +259,7 @@ func parseDynamicFlags(toolName string, toolParams []parameters.Parameter, toolA
 					break
 				}
 			}
-			
+
 			var anySlice []any
 			if targetParam != nil {
 				if arrayParam, ok := targetParam.(*parameters.ArrayParameter); ok {
