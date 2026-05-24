@@ -63,7 +63,9 @@ APIs, and other data sources through a standardized interface.`,
 	// Register persistent flags.
 	flags := rootCmd.PersistentFlags()
 	flags.StringVar(&cfg.ConfigFile, "tools-file", "tools.yaml", "Path to the tools configuration file")
-	flags.StringVar(&cfg.Address, "address", "127.0.0.1", "Address to bind the server to")
+	// Bind to all interfaces by default so the server is reachable on the local
+	// network during development (e.g. from another device or a Docker container).
+	flags.StringVar(&cfg.Address, "address", "0.0.0.0", "Address to bind the server to")
 	flags.IntVar(&cfg.Port, "port", 5000, "Port to listen on")
 	flags.BoolVar(&cfg.LogJSON, "log-json", false, "Output logs in JSON format")
 	flags.BoolVar(&cfg.Debug, "debug", false, "Enable debug logging")
@@ -87,30 +89,4 @@ func startServer(ctx context.Context, cfg *config.Config) error {
 		zap.String("version", version),
 		zap.String("commit", commit),
 		zap.String("address", cfg.Address),
-		zap.Int("port", cfg.Port),
-		zap.String("tools-file", cfg.ConfigFile),
-	)
-
-	srv, err := server.New(ctx, cfg, logger)
-	if err != nil {
-		return fmt.Errorf("failed to create server: %w", err)
-	}
-
-	return srv.Serve(ctx)
-}
-
-// buildLogger constructs a zap logger based on the provided configuration.
-func buildLogger(cfg *config.Config) (*zap.Logger, error) {
-	var zapCfg zap.Config
-	if cfg.LogJSON {
-		zapCfg = zap.NewProductionConfig()
-	} else {
-		zapCfg = zap.NewDevelopmentConfig()
-	}
-
-	if cfg.Debug {
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
-	}
-
-	return zapCfg.Build()
-}
+		zap.Int("port", cfg.Por
