@@ -63,9 +63,9 @@ APIs, and other data sources through a standardized interface.`,
 	// Register persistent flags.
 	flags := rootCmd.PersistentFlags()
 	flags.StringVar(&cfg.ConfigFile, "tools-file", "tools.yaml", "Path to the tools configuration file")
-	// Bind to all interfaces by default so the server is reachable on the local
-	// network during development (e.g. from another device or a Docker container).
-	flags.StringVar(&cfg.Address, "address", "0.0.0.0", "Address to bind the server to")
+	// Bind to localhost by default for better security; use 0.0.0.0 explicitly
+	// if you need the server reachable on the local network or from Docker.
+	flags.StringVar(&cfg.Address, "address", "127.0.0.1", "Address to bind the server to")
 	flags.IntVar(&cfg.Port, "port", 5000, "Port to listen on")
 	flags.BoolVar(&cfg.LogJSON, "log-json", false, "Output logs in JSON format")
 	flags.BoolVar(&cfg.Debug, "debug", false, "Enable debug logging")
@@ -85,8 +85,4 @@ func startServer(ctx context.Context, cfg *config.Config) error {
 	}
 	defer logger.Sync() //nolint:errcheck
 
-	logger.Info("Starting MCP Toolbox",
-		zap.String("version", version),
-		zap.String("commit", commit),
-		zap.String("address", cfg.Address),
-		zap.Int("port", cfg.Por
+	logger.I
