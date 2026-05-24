@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,12 +12,105 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package main is the entry point for the MCP Toolbox server.
+// MCP Toolbox is a server that exposes tools and data sources via the
+// Model Context Protocol (MCP), enabling AI models to interact with
+// databases and other data sources.
 package main
 
 import (
-	"github.com/googleapis/mcp-toolbox/cmd"
+	"context"
+	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/googleapis/mcp-toolbox/internal/server"
+	"github.com/googleapis/mcp-toolbox/internal/config"
+	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+)
+
+var (
+	// version is set at build time via ldflags.
+	version = "dev"
+	// commit is the git commit hash set at build time.
+	commit = "unknown"
 )
 
 func main() {
-	cmd.Execute()
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	var cfg config.Config
+
+	rootCmd := &cobra.Command{
+		Use:   "mcp-toolbox",
+		Short: "MCP Toolbox — expose tools and data sources via the Model Context Protocol",
+		Long: `MCP Toolbox is a server that implements the Model Context Protocol (MCP).
+It allows AI models and agents to securely interact with databases,
+APIs, and other data sources through a standardized interface.`,
+		Version: fmt.Sprintf("%s (commit: %s)", version, commit),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return startServer(cmd.Context(), &cfg)
+		},
+	}
+
+	// Register persistent flags.
+	flags := rootCmd.PersistentFlags()
+	flags.StringVar(&cfg.ConfigFile, "tools-file", "tools.yaml", "Path to the tools configuration file")
+	flags.StringVar(&cfg.Address, "address", "127.0.0.1", "Address to bind the server to")
+	flags.IntVar(&cfg.Port, "port", 5000, "Port to listen on")
+	flags.BoolVar(&cfg.LogJSON, "log-json", false, "Output logs in JSON format")
+	flags.BoolVar(&cfg.Debug, "debug", false, "Enable debug logging")
+
+	// Set up context with signal handling for graceful shutdown.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	return rootCmd.ExecuteContext(ctx)
+}
+
+// startServer initialises the logger and starts the MCP Toolbox server.
+func startServer(ctx context.Context, cfg *config.Config) error {
+	logger, err := buildLogger(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialise logger: %w", err)
+	}
+	defer logger.Sync() //nolint:errcheck
+
+	logger.Info("Starting MCP Toolbox",
+		zap.String("version", version),
+		zap.String("commit", commit),
+		zap.String("address", cfg.Address),
+		zap.Int("port", cfg.Port),
+		zap.String("tools-file", cfg.ConfigFile),
+	)
+
+	srv, err := server.New(ctx, cfg, logger)
+	if err != nil {
+		return fmt.Errorf("failed to create server: %w", err)
+	}
+
+	return srv.Serve(ctx)
+}
+
+// buildLogger constructs a zap logger based on the provided configuration.
+func buildLogger(cfg *config.Config) (*zap.Logger, error) {
+	var zapCfg zap.Config
+	if cfg.LogJSON {
+		zapCfg = zap.NewProductionConfig()
+	} else {
+		zapCfg = zap.NewDevelopmentConfig()
+	}
+
+	if cfg.Debug {
+		zapCfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+	}
+
+	return zapCfg.Build()
 }
