@@ -66,7 +66,9 @@ APIs, and other data sources through a standardized interface.`,
 	// Bind to localhost by default for better security; use 0.0.0.0 explicitly
 	// if you need the server reachable on the local network or from Docker.
 	flags.StringVar(&cfg.Address, "address", "127.0.0.1", "Address to bind the server to")
-	flags.IntVar(&cfg.Port, "port", 5000, "Port to listen on")
+	// Changed default port from 5000 to 5001 to avoid conflict with AirPlay
+	// Receiver on macOS, which also listens on port 5000.
+	flags.IntVar(&cfg.Port, "port", 5001, "Port to listen on")
 	flags.BoolVar(&cfg.LogJSON, "log-json", false, "Output logs in JSON format")
 	flags.BoolVar(&cfg.Debug, "debug", false, "Enable debug logging")
 
