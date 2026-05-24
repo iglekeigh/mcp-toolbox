@@ -70,7 +70,9 @@ APIs, and other data sources through a standardized interface.`,
 	// Receiver on macOS, which also listens on port 5000.
 	flags.IntVar(&cfg.Port, "port", 5001, "Port to listen on")
 	flags.BoolVar(&cfg.LogJSON, "log-json", false, "Output logs in JSON format")
-	flags.BoolVar(&cfg.Debug, "debug", false, "Enable debug logging")
+	// Enable debug logging by default locally — makes it easier to trace tool
+	// calls during development without having to remember the flag every time.
+	flags.BoolVar(&cfg.Debug, "debug", true, "Enable debug logging")
 
 	// Set up context with signal handling for graceful shutdown.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -82,9 +84,4 @@ APIs, and other data sources through a standardized interface.`,
 // startServer initialises the logger and starts the MCP Toolbox server.
 func startServer(ctx context.Context, cfg *config.Config) error {
 	logger, err := buildLogger(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to initialise logger: %w", err)
-	}
-	defer logger.Sync() //nolint:errcheck
-
-	logger.I
+	if e
