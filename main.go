@@ -62,7 +62,9 @@ APIs, and other data sources through a standardized interface.`,
 
 	// Register persistent flags.
 	flags := rootCmd.PersistentFlags()
-	flags.StringVar(&cfg.ConfigFile, "tools-file", "tools.yaml", "Path to the tools configuration file")
+	// Default config file name changed to my-tools.yaml so it doesn't
+	// accidentally pick up the upstream example file when testing locally.
+	flags.StringVar(&cfg.ConfigFile, "tools-file", "my-tools.yaml", "Path to the tools configuration file")
 	// Bind to localhost by default for better security; use 0.0.0.0 explicitly
 	// if you need the server reachable on the local network or from Docker.
 	flags.StringVar(&cfg.Address, "address", "127.0.0.1", "Address to bind the server to")
@@ -81,7 +83,4 @@ APIs, and other data sources through a standardized interface.`,
 	return rootCmd.ExecuteContext(ctx)
 }
 
-// startServer initialises the logger and starts the MCP Toolbox server.
-func startServer(ctx context.Context, cfg *config.Config) error {
-	logger, err := buildLogger(cfg)
-	if e
+// startServer initialise
